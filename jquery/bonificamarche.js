@@ -1570,7 +1570,7 @@ var pointStyle = new OpenLayers.Style({
         var filters = [], filter;
         var zoomTo = false;
         $('#segnalazioni input').each(function(){
-            if($(this).attr("type") == "date"){
+            if($(this).attr("searchtype") == "5"){
                 if($(this).attr("id").slice(-3) == '_da' && $(this).val()){
                     filter = new OpenLayers.Filter.Comparison({
                         type: OpenLayers.Filter.Comparison.GREATER_THAN_OR_EQUAL_TO,
