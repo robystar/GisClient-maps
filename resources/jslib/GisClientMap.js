@@ -190,18 +190,23 @@ OpenLayers.GisClient = OpenLayers.Class({
             var controls = this.mapOptions.controls;
             this.mapOptions.controls = [];
         }
+        var center = this.mapOptions.center;
+        delete this.mapOptions.center;
+        this.mapOptions.projection = new OpenLayers.Projection(this.mapOptions.projection);
+        //delete this.mapOptions.displayProjection// = new OpenLayers.Projection(this.mapOptions.displayProjection);
+        //this.mapOptions.displayProjection = new OpenLayers.Projection(this.mapOptions.displayProjection);
        // this.mapOptions.resolutions = this.mapOptions.serverResolutions.slice(this.mapOptions.minZoomLevel,this.mapOptions.maxZoomLevel);       
         this.map = new OpenLayers.Map(this.mapDiv, this.mapOptions);
         this.map.config = this;
-        this.emptyBaseLayer = new OpenLayers.Layer.Image('EMPTY_BASE_LAYER',OpenLayers.ImgPath +'blank.gif', this.map.maxExtent, new OpenLayers.Size(1,1),{maxResolution:this.map.resolutions[0],  resolutions:this.map.resolutions, displayInLayerSwitcher:true, isBaseLayer:true});
+        this.emptyBaseLayer = new OpenLayers.Layer.Image('EMPTY_BASE_LAYER',OpenLayers.ImgPath +'blank.gif', OpenLayers.Bounds.fromArray(this.mapOptions.maxExtent), new OpenLayers.Size(1,1),{maxResolution:this.mapOptions.resolutions[0],  resolutions:this.mapOptions.resolutions, displayInLayerSwitcher:true, isBaseLayer:true});
         this.map.addLayer(this.emptyBaseLayer);
         this.map.zoomToMaxExtent ({restricted:true});
-
+        this.map.displayProjection = new OpenLayers.Projection("EPSG:4326")
 
         this.initLayers();
 
         if(controls) this.map.addControls(controls);
-        //if(this.mapOptions.center) this.map.setCenter(this.mapOptions.center);
+        //if(center) this.map.setCenter(this.mapOptions.center);
         //if(this.mapOptions.zoom) this.map.zoomTo(this.mapOptions.zoom);
         //console.log(this)
 
