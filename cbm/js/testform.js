@@ -22,7 +22,7 @@
     $('input').val('');
 
     var host = "http://sit.bonificamarche.it";
-    var serviceURL = host + "/services/bonificamarche/testServiceInfo.php";
+    var serviceURL = host + "/services/bonificamarche/xServiceInfoprova.php";
     var gisclientUrl = host + "/services/ows.php?PROJECT=bonificamarche&MAP=consorziobonifica";
     var mapBaseURL = host + "/bonificamarche/consorziobonifica";
     var tileGridName = "epsg3857";
@@ -578,7 +578,7 @@
       /****************** CAMPO DESCIZIONE SU POPUP *************************/
       function getDrawingShapes (){
 
-        var id = $("campoid").val(); id=3000;
+        var id = $("campoid").val(); id=3000000;
         var editable = true; //todo!!!!!!!!!!!!!!
         var data = {
           request:"getdata",
@@ -818,7 +818,7 @@
       getDrawingShapes ();
       //DA CHIAMARE VIA CODICE IL BUTTON SOLO PER I TEST
       $("#draw-save-button").bind("click",function(){
-        saveDrawingShapes({"id":3000})
+        saveDrawingShapes({"id":3000000})
       });
   
 
