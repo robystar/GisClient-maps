@@ -1,8 +1,3 @@
-var GisClientMap; //POI LO TOGLIAMO!!!!
-var mycontrol,ismousedown;
-
-
-//INITMAP PER FARCI QUALCOSA
 $(function() {
 
 
@@ -165,6 +160,9 @@ var initMap = function(){
       map.getControlsByClass("OpenLayers.Control.Navigation")[0].disableZoomWheel();
     } 
 
+    var proj_3003 = new OpenLayers.Projection("EPSG:3003");
+    var proj_3857 = new OpenLayers.Projection("EPSG:3857");
+    var maxScale = 1000000000;
 
     var styleBox = new OpenLayers.StyleMap({
             'select': {
@@ -205,62 +203,76 @@ var initMap = function(){
 
 
     var btnPrint = new OpenLayers.Control.PrintMap({
-            tbarpos:"first", 
-            //type: OpenLayers.Control.TYPE_TOGGLE, 
-            formId: 'printpanel',
-            exclusiveGroup: 'sidebar',
-            iconclass:"glyphicon-white glyphicon-print", 
-            title:"Pannello di stampa",
-            maxScale:1000,
-            editMode: editMode,
-            styleBox: styleBox,
-            
-            serviceUrl:'/gisclient/services/print.php',
-            eventListeners: {
-                updatebox: function(e){
+      tbarpos:"first", 
+      //type: OpenLayers.Control.TYPE_TOGGLE, 
+      formId: 'printpanel',
+      exclusiveGroup: 'sidebar',
+      iconclass:"glyphicon-white glyphicon-print", 
+      title:"Pannello di stampa",
+      maxScale:maxScale,
+      allowDrag: editMode,
+      allowResize: editMode,
+      allowRotation: $('input[name="opt_rotation"]').is(':checked'),
+      autoCenter: $('[name="opt_center"]').is(':checked'),
+      styleBox: styleBox,
+      serviceUrl:'/gisclient/services/print.php',
+      eventListeners: {
+          updateboxInfo: function(e){
+              var bounds = this.printBox.geometry.getBounds();
+              var center = bounds.getCenterLonLat().clone().transform(proj_3857, proj_3003);
+              $('#'+this.formId+' input[name="scale"]').val(Math.round(this.boxScale));
+              $('#'+this.formId+' input[name="coordx"]').val(Math.round(center.lon));
+              $('#'+this.formId+' input[name="coordy"]').val(Math.round(center.lat));
+              $('#'+this.formId+' input[name="boxw"]').val(Math.round(bounds.getWidth()));
+              $('#'+this.formId+' input[name="boxh"]').val(Math.round(bounds.getHeight()));
+              $('#'+this.formId+' input[name="boxr"]').val(Math.round(this.modifyControl.rotation));
+              console.log(this)
+          }
 
-                    var bounds = this.printBox.geometry.getBounds();
-                    var center = bounds.getCenterLonLat().clone().transform("EPSG:3857","EPSG:3003");
-                    $('input[name="scale"]').val(Math.round(this.printBoxScale));
-                    $('input[name="coordx"]').val(Math.round(center.lon));
-                    $('input[name="coordy"]').val(Math.round(center.lat));
-                    $('input[name="boxw"]').val(Math.round(bounds.getWidth()));
-                    $('input[name="boxh"]').val(Math.round(bounds.getHeight()));
-                }
+      }
 
-            }
+    });
+    
+            format: $('#'+this.formId+' input[name="format"]:checked').val(),
+            printFormat: $('#'+this.formId+' select[name="formato"]').val(),
+            direction: $('#'+this.formId+' input[name="direction"]:checked').val(),
 
 
-        });
-
-    $('select[name="page_layout"]').change(function() {
+    $('#'+this.formId+' select[name="page_layout"]').change(function() {
         btnPrint.pageLayout = $(this).val();
         btnPrint.updatePrintBox();
     });
-    $('select[name="page_format"]').change(function() {
+    $('#'+this.formId+' select[name="page_format"]').change(function() {
         btnPrint.pageFormat = $(this).val();
         btnPrint.updatePrintBox();
     });
-    $('select[name="page_legend"]').change(function() {
+    $('#'+this.formId+' select[name="page_legend"]').change(function() {
         btnPrint.pageLegend = $(this).val();
     });
     $('#printpanel').on('click', 'button[role="print"]', function(event) {
         event.preventDefault();
         btnPrint.doPrint();
     });
+    $('#'+this.formId+' input[name="opt_rotation"]').change(function() {
+        btnPrint.allowRotation = $('input[name="opt_rotation"]').is(':checked');
+        btnPrint.updateMode();
+    });
+    $('#'+this.formId+' input[name="opt_center"]').change(function() {
+        btnPrint.autoCenter = $('input[name="opt_center"]').is(':checked');
+    });
 
 
-    $('input[name="scale"]').spinner({
+    $('#'+this.formId+' input[name="scale"]').spinner({
       step: 100,
       min: 100,
-      max: 1000,
+      max: maxScale,
       numberFormat: "n",
       change: function( event, ui ) {
-        btnPrint.printBoxScale = $(this).val();
+        btnPrint.boxScale = $(this).val();
         btnPrint.updatePrintBox();
       },
       spin: function( event, ui ) {
-        btnPrint.printBoxScale = $(this).val();
+        btnPrint.boxScale = $(this).val();
         btnPrint.updatePrintBox();
       }
     });
@@ -269,68 +281,75 @@ var initMap = function(){
         var x = Math.round(parseFloat($('input[name="coordx"]').attr('value')));
         var y = Math.round(parseFloat($('input[name="coordy"]').attr('value')));
         if(x && y) {
-          var position = new OpenLayers.LonLat(x,y).transform("EPSG:3003","EPSG:3857");
-          btnPrint.movePrintBox(new OpenLayers.LonLat(x,y).transform("EPSG:3003","EPSG:3857"));
+          var position = new OpenLayers.LonLat(x,y).transform(proj_3003,proj_3857);
+          btnPrint.movePrintBox(position);
           map.zoomToExtent(btnPrint.getBounds(),true);
           //map.setCenter(position,22,false,false);
         }
     })
 
-    btnPrint.pageLayout = $('[name="page_layout"]').attr('value');
-    btnPrint.pageFormat = $('[name="page_format"]').attr('value');
-    btnPrint.pageLegend = $('[name="page_legend"]').attr('value');
+    if($('#'+this.formId+' [name="page_layout"]').length)
+      btnPrint.pageLayout = $('#'+this.formId+' [name="page_layout"]').attr('value');
+    if($('#'+this.formId+' [name="page_format"]').length)
+      btnPrint.pageFormat = $('#'+this.formId+' [name="page_format"]').attr('value');
+    if($('#'+this.formId+' [name="page_legend"]').length)
+      btnPrint.pageLegend = $('#'+this.formId+' [name="page_legend"]:checked').attr('value')=='yes';
 
     //ricarico i dati salvati
-    var x = Math.round(parseFloat($('[name="coordx"]').attr('value')));
-    var y = Math.round(parseFloat($('[name="coordy"]').attr('value')));
-    btnPrint.printBoxScale = Math.round(parseFloat($('[name="scale"]').attr('value')));
+    var x = Math.round(parseFloat($('#'+this.formId+' [name="coordx"]').attr('value')));
+    var y = Math.round(parseFloat($('#'+this.formId+' [name="coordy"]').attr('value')));
+    if($('#'+this.formId+' [name="scale"]').length>0)
+      btnPrint.boxScale = Math.round(parseFloat($('#'+this.formId+' [name="scale"]').attr('value')));
+
 
     map.addControl(btnPrint);
     btnPrint.activate();
     if(x && y){
-      btnPrint.centerBox = new OpenLayers.LonLat(x,y).transform("EPSG:3003","EPSG:3857");
-      btnPrint.movePrintBox(new OpenLayers.LonLat(x,y).transform("EPSG:3003","EPSG:3857"));
+      btnPrint.movePrintBox(new OpenLayers.LonLat(x,y).transform(proj_3003, proj_3857));
       map.zoomToExtent(btnPrint.getBounds(),true);
     } 
 
     //VISUALIZZAZIONE DELLE COORDINATE
     var projection = this.mapOptions.displayProjection || this.mapOptions.projection;
-    var v = projection.split(":");
-    map.addControl(new OpenLayers.Control.MousePosition({
-        element:document.getElementById("map-coordinates"),
-        prefix: '<a target="_blank" ' + 'href="http://spatialreference.org/ref/epsg/' + v[1] + '/">' + projection + '</a> coordinate: '
-    }));
+    projection = new OpenLayers.Projection(projection);
+    // var v = projection.getCode().split(":");
+    // map.addControl(new OpenLayers.Control.MousePosition({
+    //     element:document.getElementById("map-coordinates"),
+    //     prefix: '<a target="_blank" ' + 'href="http://spatialreference.org/ref/epsg/' + v[1] + '/">' + projection + '</a> coordinate: '
+    // }));
 
-    if(editMode){
+    map.addControl(new OpenLayers.Control.LayerSwitcher())
+
+
+/*    if(editMode){
 
       map.events.register("moveend", map, function(){
-        if($('[name="opt_ricentra"]').attr("checked")){
+        if($('[name="opt_center"]').is(':checked')){
           var center = map.getCenter();
           btnPrint.movePrintBox(center);
-          center = center.transform("EPSG:3857","EPSG:3003");
+          center = center.transform(new OpenLayers.Projection("EPSG:3857"),new OpenLayers.Projection("EPSG:3003"));
           $('input[name="coordx"]').val(Math.round(center.lon));
           $('input[name="coordy"]').val(Math.round(center.lat));
         } 
       });
 
       var bounds = btnPrint.printBox.geometry.getBounds();
-      var center = bounds.getCenterLonLat().clone().transform("EPSG:3857","EPSG:3003");
+      var center = bounds.getCenterLonLat().clone().transform(new OpenLayers.Projection("EPSG:3857"),new OpenLayers.Projection("EPSG:3003"))
       $('input[name="coordx"]').val(Math.round(center.lon));
       $('input[name="coordy"]').val(Math.round(center.lat));
       $('input[name="boxw"]').val(Math.round(bounds.getWidth()));
       $('input[name="boxh"]').val(Math.round(bounds.getHeight()));
-    }
+    }*/
 
 
 }//END initMap
 
     initDialog();
-
-    OpenLayers.ImgPath = "/gisclient/maps/resources/themes/openlayers/img/";
     var GisClientBaseUrl = "/gisclient/"
+    OpenLayers.ImgPath = GisClientBaseUrl + "maps/resources/themes/openlayers/img/";
 
     $.ajax({
-      url: '/gisclient/services/gcmap.php',
+      url: GisClientBaseUrl + 'services/gcmap.php',
       dataType: "jsonp",
       data:{"mapset":"test"},
       jsonpCallback: "jsoncallback",
@@ -372,12 +391,12 @@ var initMap = function(){
       baseUrl: GisClientBaseUrl,
       mapOptions:{
         controls:[
-            new OpenLayers.Control.Navigation(),
+            new OpenLayers.Control.Navigation({zoomWheelEnabled:true}),
             new OpenLayers.Control.Attribution(),
             new OpenLayers.Control.LoadingPanel(),
             new OpenLayers.Control.PanZoomBar(),
             new OpenLayers.Control.ScaleLine()
-
+            
             /*
             new OpenLayers.Control.TouchNavigation({
                 dragPanOptions: {

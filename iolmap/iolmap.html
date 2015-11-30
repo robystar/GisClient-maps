@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
     <title>Base Openlayers Map</title>
     <link rel="stylesheet" href="../resources/themes/openlayers/style.css" type="text/css">
-    <script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?language=it&libraries=drawing,places,geometry"></script>
     <script type="text/javascript" src="../resources/jslib/jquery.min.js"></script>
     <!--<script type="text/javascript" src="../resources/jslib/jquery.easyui.min.js"></script>-->
     <script type="text/javascript" src="jquery-ui-1.10.4.custom.min.js"></script>
+    <script type="text/javascript" src="../resources/external/select2/select2.js"></script>
 
-    <script src="../resources/jslib/OpenLayers.js"></script>
+    <script src="OpenLayers.js"></script>
     <script src="../resources/jslib/GisClientMap.js"></script>   
     <script src="../resources/jslib/LoadingPanel.js"></script>
     <script src="PrintMap.js"></script>
@@ -64,6 +64,20 @@
     </div>
     
     <div class="form-group">
+        <label for="print_panel_template">Template di stampa</label>
+        <select name="template" id="print_panel_template" class="form-control">
+            <option value="default">Default</option>
+            <option value="pippo">Pippo</option>
+            <option value="pluto">Pluto</option>
+            <option value="paperino">Paperino</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label class="checkbox-inline">
+            <input type="checkbox" name="opt_northarrow" id="opt_northarrow">Freccia Nord
+        </label>
+    </div>    
+    <div class="form-group">
         <label for="print_panel_format">Formato</label>
         <label class="radio-inline">
             <input type="radio" name="format" id="print_panel_format" value="HTML" checked> HTML
@@ -72,17 +86,11 @@
             <input type="radio" name="format" id="" value="PDF"> PDF
         </label>
     </div>
-    
     <div class="form-group">
-        <label for="print_panel_scalemode">Scala</label>
-        <br />
-        <label>
-            <input type="radio" name="scale_mode" id="print_panel_scalemode_auto" value="auto" checked> Automatica
+        <label class="input-inline">Scala 1:
+            <input type="text" name="scale" id="scale" style="width:80px">
         </label>
-        <br />
-        <input type="radio" name="scale_mode" id="print_panel_scalemode_user" value="user" >1: <input type="text" name="scale" style="color:black;">
     </div>
-    
     <div class="form-group">
         <label for="print_panel_resolution">Risoluzione</label>
         <select id="print_panel_resolution" name="print_resolution" class="form-control">
@@ -90,7 +98,28 @@
             <option value="300">Alta</option>
         </select>
     </div>
-    
+    <div class="form-group">
+        <label class="checkbox-inline">
+            <input type="checkbox" name="opt_rotation" id="opt_rotation">Consenti rotazione
+        </label>
+    </div>
+    <div class="form-group">
+        <label class="checkbox-inline">
+            <input type="checkbox" name="opt_center" id="opt_center">Centra automaticamente
+        </label>
+    </div>
+    <div class="form-group">
+    <label for="coordx">Xc: </label>
+    <input type="text" name="coordx" id="coordx" style="width:80px">
+    <label for="coordy">Yc: </label>
+    <input type="text" name="coordy" id="coordy" style="width:80px">    
+    <label for="boxw">W: </label>
+    <input type="text" name="boxw" id="boxw" style="width:80px">
+    <label for="boxh">H: </label>
+    <input type="text" name="boxh" id="boxh" style="width:80px">
+    <label for="boxr">R: </label>
+    <input type="text" name="boxr" id="boxr" style="width:80px">
+    </div>
     <p>
         <button type="button" role="print" class="btn btn-default">Stampa</button>
         <a href="#" target="_blank" role="html"><span role="icon" class="glyphicon-disabled glyphicon-file print-download-icon"></span><span></span></a>

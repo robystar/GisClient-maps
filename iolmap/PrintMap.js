@@ -1,3 +1,55 @@
+OpenLayers.Control.ModifyFeature.prototype.collectRadiusHandle = function() {
+        var geometry = this.feature.geometry;
+        var bounds = geometry.getBounds();
+        var center = bounds.getCenterLonLat();
+        var originGeometry = new OpenLayers.Geometry.Point(
+            center.lon, center.lat
+        );
+        var radiusGeometry = new OpenLayers.Geometry.Point(
+            bounds.right, bounds.bottom
+        );
+        var radius = new OpenLayers.Feature.Vector(radiusGeometry);
+        var resize = (this.mode & OpenLayers.Control.ModifyFeature.RESIZE);
+        var reshape = (this.mode & OpenLayers.Control.ModifyFeature.RESHAPE);
+        var rotate = (this.mode & OpenLayers.Control.ModifyFeature.ROTATE);
+        var self = this;
+        console.log(this)
+        radiusGeometry.move = function(x, y) {
+            OpenLayers.Geometry.Point.prototype.move.call(this, x, y);
+            var dx1 = this.x - originGeometry.x;
+            var dy1 = this.y - originGeometry.y;
+            var dx0 = dx1 - x;
+            var dy0 = dy1 - y;
+            if(rotate) {
+                var a0 = Math.atan2(dy0, dx0);
+                var a1 = Math.atan2(dy1, dx1);
+                var angle = a1 - a0;
+                angle *= 180 / Math.PI;
+                geometry.rotate(angle, originGeometry);
+                self.rotation+= angle;  
+                if (self.rotation > 360) self.rotation-=360;
+                console.log(self.rotation)
+            }
+            if(resize) {
+                var scale, ratio;
+                // 'resize' together with 'reshape' implies that the aspect 
+                // ratio of the geometry will not be preserved whilst resizing 
+                if (reshape) {
+                    scale = dy1 / dy0;
+                    ratio = (dx1 / dx0) / scale;
+                } else {
+                    var l0 = Math.sqrt((dx0 * dx0) + (dy0 * dy0));
+                    var l1 = Math.sqrt((dx1 * dx1) + (dy1 * dy1));
+                    scale = l1 / l0;
+                }
+                geometry.resize(scale, originGeometry, ratio);
+            }
+        };
+        radius._sketch = true;
+        this.radiusHandle = radius;
+        this.layer.addFeatures([this.radiusHandle], {silent: true});
+    }
+
 OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
     type: OpenLayers.Control.TYPE_TOGGLE,
     formId: null, //id del form di stampa
@@ -10,13 +62,18 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
     pageFormat:"A4", //controlli
     pageLayout:"vertical",
     printFormat:"HTML",
-    printBoxScale:null,
+    boxScale:null,
     printLegend:0,
     printResolution:150,
-    maxPrintScale:null,
+    maxScale:null,
     layerBox:null,
-    editMode:false,
+    allowDrag:false,
+    allowResize:false,
+    allowRotation:false,
+    autoCenter:false,
     styleBox:null,
+
+    EVENT_TYPES: ["activate","deactivate","updateboxInfo"],
 
     //waitFor: null, //se il pannello viene caricato async, il tool aspetta il caricamento prima di far partire la richiesta per il box
     pages: null,
@@ -29,11 +86,17 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
     doPrint: function() {
         var me = this;
         var params = me.getParams();
+        params["tiles"] = me.getTiles();
+        params["format"] = me.printFormat;
+        params["legend"] = me.pageLegend;
+        params["direction"] = me.pageLayout;
+
+
         
         if(me.loadingControl) me.loadingControl.maximizeControl();
         
-        $('#'+me.formId+' a[role="pdf"], #printpanel a[role="html"]').attr('href', '#');
-        $('#'+me.formId+' span[role="icon"]').removeClass('glyphicon-white').addClass('glyphicon-disabled');
+//        $('#'+me.formId+' a[role="pdf"], #printpanel a[role="html"]').attr('href', '#');
+//        $('#'+me.formId+' span[role="icon"]').removeClass('glyphicon-white').addClass('glyphicon-disabled');
         
         $.ajax({
             url: this.serviceUrl,
@@ -77,15 +140,7 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
         this.layerbox = new OpenLayers.Layer.Vector("LayerBox",{styleMap:me.styleBox});    
         this.map.addLayer(this.layerbox);
 
-        if(this.editMode){
-            this.modifyControl = new OpenLayers.Control.ModifyFeature(this.layerbox);
-            this.modifyControl.mode = OpenLayers.Control.ModifyFeature.RESIZE | OpenLayers.Control.ModifyFeature.DRAG;
-            this.map.addControl(this.modifyControl);
-            this.layerbox.events.register('featuremodified', this, this.onUpdateBox);
-        }        
-
-        
-        var params = this.getConfigParams();
+        var params = this.getParams();
         params.request_type = 'get-box';
         $.ajax({
             url: this.serviceUrl,
@@ -100,12 +155,9 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
                     return alert(OpenLayers.i18n('System error'));
                 }
                 me.pages = response.pages;
+                me.drawPrintBox.apply(me);
+                me.events.triggerEvent("updateboxInfo");
 
-                //console.log(me.active)
-                //if(me.active) 
-                    me.drawPrintBox();
-
- 
             },
             error: function() {
                 return alert(OpenLayers.i18n('System error'));
@@ -115,81 +167,47 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
 
     },
     
-    getConfigParams: function() {
-
-
-        //DA SISTEMARE !!!!!!!!!!!!
+    getParams: function() {
+        var self = this;
+        
         var size  = this.map.getCurrentSize();
-        var bounds = this.map.calculateBounds();
-        var topLeft = new OpenLayers.Geometry.Point(bounds.top, bounds.left);
-        var topRight = new OpenLayers.Geometry.Point(bounds.top, bounds.right);
-        var distance = topLeft.distanceTo(topRight);
-        var pixelsDistance  = size.w / distance;
-        var scaleMode = $('[name="scale_mode"]:checked').attr('value') || 'user';
-        var scale = $('[name="scale"]').attr('value');
-        var currentScale = this.map.getScale();
-        if(scaleMode == 'user') {
-            pixelsDistance = pixelsDistance / (scale/currentScale);
-        }
-        
-        if(this.printBox) {
-            var boxBounds = new OpenLayers.Bounds.fromArray(this.printBox);
-            var center = boxBounds.getCenterLonLat();
-        } else {
-            var center = this.map.getCenter();
-        }
-        
-        
+        var center = this.map.getCenter();
         var copyrightString = null;
         var searchControl = this.map.getControlsByClass('OpenLayers.Control.Attribution');
         if(searchControl.length > 0) {
             copyrightString = searchControl[0].div.innerText;
         }
-        
-        var srid = this.map.getProjection();
-        if(srid == 'ESPG:900913') srid = 'EPSG:3857';
-        
-        var params = {
+
+        params = {
             viewport_size: [size.w, size.h],
             center: [center.lon, center.lat],
-            format: $('#'+this.formId+' input[name="format"]:checked').val(),
-            printFormat: $('#'+this.formId+' select[name="formato"]').val(),
-            direction: $('#'+this.formId+' input[name="direction"]:checked').val(),
-            scale_mode: scaleMode,
-            scale: scale,
-            current_scale: currentScale,
-            text: $('#'+this.formId+' textarea[name="text"]').val(),
-            extent: this.map.calculateBounds().toBBOX(),
-            date: $('#'+this.formId+' input[name="date"]').val(),
-            dpi: $('#'+this.formId+' select[name="print_resolution"]').val(),
-            srid: srid,
-            pixels_distance: pixelsDistance,
-            copyrightString: copyrightString
-        };
+            srid: this.map.getProjection(),
+            copyrightString: copyrightString,
+            extent: this.map.calculateBounds().toBBOX() //Non serve ma me lo chiede da vedere
+        }
+
+
+
         return params;
-        
     },
 
-
-    getParams: function() {
+    getTiles: function(){
+        
+        var tile,tiles = [];
         var self = this;
-        
-        var params = this.getConfigParams();
-        
-        var tiles = [];
-        
+        var mapsetConfig = this.map.config;
+
         $.each(this.map.layers, function(key, layer) {
             if (!layer.getVisibility()) return;
             //if (!layer.calculateInRange()) return;
-            var tile;
             if(layer.CLASS_NAME == 'OpenLayers.Layer.TMS') {
                 tile = {
                     url: layer.url.replace('/tms/', '/wms/'),
                     parameters: {
                         service: 'WMS',
                         request: 'GetMap',
-                        project: gisclient.getProject(),
-                        map: gisclient.getMapOptions().mapsetName,
+                        project: mapsetConfig.projectName,
+                        map: mapsetConfig.mapsetName,
                         layers: [layer.layername.substr(0, layer.layername.indexOf('@'))],
                         version: '1.1.1',
                         format: 'image/png'
@@ -214,7 +232,7 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
                     VERSION: '1.1.1'
                 };
                 tile = {
-                    url: GisClientMap.mapProxyBaseUrl+'/'+GisClientMap.mapsetName+'/service?',
+                    url: mapsetConfig.mapProxyBaseUrl+'/'+mapsetConfig.mapsetName+'/service?',
                     type: 'WMS',
                     parameters: params,
                     opacity: layer.opacity ? (layer.opacity * 100) : 100
@@ -226,8 +244,8 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
                     type: 'external_provider',
                     externalProvider: layer.CLASS_NAME.replace('OpenLayers.Layer.', ''),
                     name: layer.name,
-                    project: GisClientMap.projectName,
-                    map: GisClientMap.mapsetName
+                    project: mapsetConfig.projectName,
+                    map: mapsetConfig.mapsetName
                 };
             } else console.log(layer.name+' '+layer.CLASS_NAME+' non riconosciuto per stampa');
             if(tile) {
@@ -241,36 +259,22 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
             }
         });
 
-        if($('#'+this.formId+' input[name="legend"]:checked').val() == 'yes') {
-            params.legend = 'yes';
-            
-        }
         tiles.reverse();
-        params.tiles = tiles;
-
-
-        return params;
+        return tiles;
     },
 
-    
-    onUpdateBox: function(e){
-
-
-        var pageSize=this.pages[this.pageLayout][this.pageFormat];
-        //si dovrebbero passare già in float
-        var pageW = parseFloat(pageSize.w);
-        var pageH = parseFloat(pageSize.h);
+    onBoxModify: function(e){
 
         var bounds = e.feature.geometry.getBounds();
-        this.printBoxScale = Math.abs(bounds.right-bounds.left)/pageW*100;
-
-        if(this.printBoxScale > this.maxScale) {
-            this.printBoxScale = this.maxScale;
+        //(misure di pagina in cm e sistema di riferimentoq in metri .. da generalizzare);
+        this.boxScale = this.roundScale(Math.abs(bounds.right-bounds.left)/this.pageW*100);
+        if(this.maxScale && this.boxScale > this.maxScale) {
+            this.boxScale = this.maxScale;
             this.updatePrintBox();
+        } 
+        else {
+            this.events.triggerEvent("updateboxInfo");
         }
-
-        this.events.triggerEvent("updatebox");
-
     },
 
     
@@ -282,28 +286,27 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
         }
     },
 
+    updateMode: function(){
+        this.modifyControl.mode = 0;
+        if (this.allowDrag) this.modifyControl.mode |= OpenLayers.Control.ModifyFeature.DRAG;
+        if (this.allowResize) this.modifyControl.mode |= OpenLayers.Control.ModifyFeature.RESIZE;
+        if (this.allowRotation) this.modifyControl.mode |= OpenLayers.Control.ModifyFeature.ROTATE;
+    },
 
     drawPrintBox: function() {
         
-        console.log("INSERIMENTO POLIGONO")
-        
+        var self = this;
 
-        //console.log(this.pages)
-        //console.log(this.pageLayout)
-        //console.log(this.pageFormat)
+        var pageSize=this.pages[this.pageLayout][this.pageFormat];
+        var pageW = parseFloat(pageSize.w);
+        var pageH = parseFloat(pageSize.h);
+        this.pageW = pageW;
 
-
-
-
-
-        //calcolo l'area libera per il box di stampa
+        //calcolo l'area libera per il box di stampa 
+        //(misure di pagina in cm e sistema di riferimentoq in metri .. da generalizzare);
         var boxW = this.map.size.w - this.offsetLeft - this.offsetRight - 2*this.margin;
         var boxH = this.map.size.h - this.offsetTop - this.offsetBottom - 2*this.margin;
 
-        var pageSize=this.pages[this.pageLayout][this.pageFormat];
-        //si dovrebbero passare già in float
-        var pageW = parseFloat(pageSize.w);
-        var pageH = parseFloat(pageSize.h);
 
         //normalizzo rispetto al rapporto dimensionale della stampa
         if(pageW/pageH > boxW/boxH)
@@ -311,61 +314,69 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
         else
             boxW = boxH*pageW/pageH;
 
+
         var leftPix = parseInt((this.map.size.w - boxW)/2);
         var topPix = parseInt((this.map.size.h - boxH)/2);
 
         var lb = this.map.getLonLatFromPixel(new OpenLayers.Pixel(leftPix, topPix + boxH));
         var rt = this.map.getLonLatFromPixel(new OpenLayers.Pixel(leftPix + boxW, topPix));
 
+
         //vedo che scala è uscita
         //occhio all'unità di misura meglio portare tutto in pollici??
         //comunque per ora va tutto im metri
-        if(!this.printBoxScale) this.printBoxScale = Math.abs(lb.lon-rt.lon)/pageW*100;
-        
-        var boxScale = Math.abs(lb.lon-rt.lon)/pageW*100;
-
         var bounds = new OpenLayers.Bounds(lb.lon, lb.lat, rt.lon, rt.lat);
+        var boundsScale = this.roundScale(Math.abs(lb.lon-rt.lon)/pageW*100);
 
-        if(this.printBoxScale){
-            if(this.printBoxScale > this.maxScale) {
-                //scalo e risetto la scala
-                bounds = bounds.scale(this.maxScale/boxScale)
-                this.printBoxScale = this.maxScale;
-            }
-            else{
-                bounds = bounds.scale(this.printBoxScale/boxScale)
-            }
+        //Se ho impostato la scala prima della chiamata scalo il box
+        if(this.boxScale && this.maxScale){ 
+            this.boxScale = Math.min(this.boxScale, this.maxScale);
+        }
+        else if(this.maxScale && this.maxScale < boundsScale){
+            this.boxScale = this.maxScale;
+        }
+        
+        if(this.boxScale){
+            bounds = bounds.scale(this.boxScale/boundsScale);
+        }
+        else{
+            this.boxScale = boundsScale;
         }
 
-        boxW = bounds.getWidth();
-        boxH = bounds.getHeight();
-
-
-        //DA CAPIRE PERCHE NON SONO  RIUSCITO A FARE UN SEMPLICE MOVE
-        //if(this.centerBox) bounds = new OpenLayers.Bounds(this.centerBox.lon - boxW/2, this.centerBox.lat - boxH/2, this.centerBox.lon + boxW/2,  this.centerBox.lat + boxH/2);
-
+        this.geometryBox = bounds.toGeometry();
+        this.originalBounds = bounds.clone();
         this.printBox = new OpenLayers.Feature.Vector(bounds.toGeometry());
         this.layerbox.addFeatures(this.printBox);
-        if(this.editMode) {
+        if(this.allowDrag || this.allowResize || this.allowRotate){
+            this.modifyControl = new OpenLayers.Control.ModifyFeature(this.layerbox);
+            this.updateMode();
+            this.modifyControl.rotation = 0;
+            this.map.addControl(this.modifyControl);
+            this.layerbox.events.register('featuremodified', this, this.onBoxModify);
             this.modifyControl.activate();
-            //this.events.triggerEvent("updatebox");
         }
+
+        var map = this.map;
+        map.events.register("moveend", map, function(){
+            if(self.autoCenter) self.movePrintBox(map.getCenter());        
+        });
+
+
 
     },
     
     updatePrintBox: function(){
 
         //se cambio le dimensioni voglio comunque mantenere la scala di stampa!!!
-        //non ruoto semplicemente il box perchè le dimensioni potrebbero essere diverse
-        //console.log(this.pageFormat)
-        //console.log(this.pageLayout)
+        //non ruoto semplicemente il box perchè le dimensioni potrebbero essere diverse per il template di stampa
+
         var pageSize=this.pages[this.pageLayout][this.pageFormat];
-        //si dovrebbero passare già in float
         var pageW = parseFloat(pageSize.w);
         var pageH = parseFloat(pageSize.h);
+        this.pageW = pageW;
 
-        var boxW = pageW*this.printBoxScale/100;
-        var boxH = pageH*this.printBoxScale/100;
+        var boxW = pageW*this.boxScale/100;
+        var boxH = pageH*this.boxScale/100;
 
         var bounds = this.printBox.geometry.getBounds();
         var center = bounds.getCenterLonLat();
@@ -377,7 +388,7 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
         this.printBox.destroy();
         this.printBox = new OpenLayers.Feature.Vector(newBounds.toGeometry());
         this.layerbox.addFeatures(this.printBox);
-        this.events.triggerEvent("updatebox");
+        this.events.triggerEvent("updateboxInfo");
 
 
 
@@ -388,12 +399,26 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
         //if(!this.editMode) return;
         if(this.modifyControl && this.modifyControl.feature) this.modifyControl.unselectFeature(this.printBox);
         this.printBox.move(position);
+        this.events.triggerEvent("updateboxInfo");
 
     },
 
     getBounds: function(){
         return this.printBox.geometry.getBounds();
 
+    },
+
+    roundScale: function(scale){
+        // if(scale > 1000000) 
+        //     scale = Math.ceil(scale/1000000) * 1000000;
+        // else if(scale > 10000) 
+        //     scale = Math.ceil(scale/10000) * 10000;
+        // else if(scale > 1000)
+        //     scale = Math.ceil(scale/1000) * 1000;
+        // else if(scale > 100)
+
+        scale = Math.ceil(scale/100) * 100;
+        return scale;
     }
 
 
