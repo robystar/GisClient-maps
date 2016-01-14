@@ -1,6 +1,5 @@
 $(function() {
 
-
   var initDialog = function(_, container){
     var elencoVie = [];
     var elencoCivici = [];
@@ -225,9 +224,9 @@ var initMap = function(){
 
     });
     
-            format: $('#'+this.formId+' input[name="format"]:checked').val(),
+/*            format: $('#'+this.formId+' input[name="format"]:checked').val(),
             printFormat: $('#'+this.formId+' select[name="formato"]').val(),
-            direction: $('#'+this.formId+' input[name="direction"]:checked').val(),
+            direction: $('#'+this.formId+' input[name="direction"]:checked').val(),*/
 
 
     $('#'+this.formId+' select[name="page_layout"]').change(function() {
@@ -348,6 +347,7 @@ var initMap = function(){
       async: false,
       success: function( response ) {
         //TODO gestire errori da server
+        console.log(response)
         var googleCallback;
         if (response.mapProviders && response.mapProviders.length>0) {
             for (var i = 0, len = response.mapProviders.length; i < len; i++) {
