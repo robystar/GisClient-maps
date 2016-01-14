@@ -232,10 +232,10 @@ var initMap = function(){
       }
 
     });
-    
+/*    
             format: $('#'+this.formId+' input[name="format"]:checked').val(),
             printFormat: $('#'+this.formId+' select[name="formato"]').val(),
-            direction: $('#'+this.formId+' input[name="direction"]:checked').val(),
+            direction: $('#'+this.formId+' input[name="direction"]:checked').val(),*/
 
 
     $('#'+this.formId+' select[name="page_layout"]').change(function() {
