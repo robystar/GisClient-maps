@@ -285,7 +285,7 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
 
     drawPrintBox: function() {
         
-        console.log("INSERIMENTO POLIGONO")
+//        console.log("INSERIMENTO POLIGONO")
         
 
         //console.log(this.pages)
