@@ -679,7 +679,7 @@ var initMap = function(){
         saveState:true,
     })
 
-    var pSelect = new OpenLayers.Control.PIPESelect(
+/*    var pSelect = new OpenLayers.Control.PIPESelect(
             OpenLayers.Handler.Click,
             {
                 clearOnDeactivate:false,
@@ -691,7 +691,7 @@ var initMap = function(){
                 title:"Ricerca valvole",
                 eventListeners: {'activate': function(){map.currentControl.deactivate();map.currentControl=this}}
             }
-        );
+        );*/
 
     //******************** TOOLBAR VERTICALE *****************************************
 
@@ -858,7 +858,7 @@ var initMap = function(){
             }      
         }),
         
-        pSelect,
+        //pSelect,
 
         btnPrint = new OpenLayers.Control.PrintMap({
             baseUrl:GISCLIENT_URL,
