@@ -300,8 +300,6 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
         var boxW = this.map.size.w - this.offsetLeft - this.offsetRight - 2*this.margin;
         var boxH = this.map.size.h - this.offsetTop - this.offsetBottom - 2*this.margin;
 
-        console.log(this)
-
         var pageSize=this.pages[this.pageLayout][this.pageFormat];
         //si dovrebbero passare già in float
         var pageW = parseFloat(pageSize.w);
@@ -355,7 +353,7 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
 
     },
     
-    updatePrintBox: function(){
+    updatePrintBox: function(recenter=true){
 
         //se cambio le dimensioni voglio comunque mantenere la scala di stampa!!!
         //non ruoto semplicemente il box perchè le dimensioni potrebbero essere diverse
@@ -372,15 +370,15 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
         var bounds = this.printBox.geometry.getBounds();
         var center = bounds.getCenterLonLat();
         var newBounds = new OpenLayers.Bounds(center.lon - boxW/2, center.lat - boxH/2, center.lon + boxW/2,  center.lat + boxH/2);
-       
+
         //????????????????????????????????????????? non aggiorna
         //BOH NON RIESCO A MODIFICARE LA FEATURE. QUINDI LA TOLGO E LA RIAGGIUNGO POI VEDIAMO
         if(this.modifyControl.feature) this.modifyControl.unselectFeature(this.printBox);
         this.printBox.destroy();
         this.printBox = new OpenLayers.Feature.Vector(newBounds.toGeometry());
         this.layerbox.addFeatures(this.printBox);
+        this.recenter = recenter;
         this.events.triggerEvent("updatebox");
-
 
 
 

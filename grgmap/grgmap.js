@@ -118,7 +118,7 @@ $(function() {
           callback(data);
         }
     }).on("change", function(e){
-        if(!e.added) return;
+        if(!(e.added && e.added.x && e.added.y)) return;
         $('input[name="coordx"]').val(Math.round(e.added.x));
         $('input[name="coordy"]').val(Math.round(e.added.y));
     });
@@ -222,10 +222,12 @@ var initMap = function(){
                     var bounds = this.printBox.geometry.getBounds();
                     var center = bounds.getCenterLonLat().clone().transform("EPSG:3857","EPSG:3003");
                     $('input[name="scale"]').val(Math.round(this.printBoxScale));
-                    $('input[name="coordx"]').val(Math.round(center.lon));
-                    $('input[name="coordy"]').val(Math.round(center.lat));
                     $('input[name="boxw"]').val(Math.round(bounds.getWidth()));
                     $('input[name="boxh"]').val(Math.round(bounds.getHeight()));
+                    if(this.recenter){
+                      $('input[name="coordx"]').val(Math.round(center.lon));
+                      $('input[name="coordy"]').val(Math.round(center.lat));
+                    }
                 }
 
             }
@@ -235,11 +237,11 @@ var initMap = function(){
 
     $('select[name="page_layout"]').change(function() {
         btnPrint.pageLayout = $(this).val();
-        btnPrint.updatePrintBox();
+        btnPrint.updatePrintBox(false);
     });
     $('select[name="page_format"]').change(function() {
         btnPrint.pageFormat = $(this).val();
-        btnPrint.updatePrintBox();
+        btnPrint.updatePrintBox(false);
     });
     $('select[name="page_legend"]').change(function() {
         btnPrint.pageLegend = $(this).val();
