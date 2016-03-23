@@ -353,8 +353,9 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
 
     },
     
-    updatePrintBox: function(recenter=true){
+    updatePrintBox: function(recenter){
 
+        if (typeof(recenter)=='undefined') recenter = true
         //se cambio le dimensioni voglio comunque mantenere la scala di stampa!!!
         //non ruoto semplicemente il box perchè le dimensioni potrebbero essere diverse
         //console.log(this.pageFormat)
