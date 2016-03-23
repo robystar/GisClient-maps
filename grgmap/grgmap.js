@@ -5,7 +5,7 @@ var mycontrol,ismousedown;
 //INITMAP PER FARCI QUALCOSA
 $(function() {
 
-
+  var comuneExtent='';
   var initDialog = function(_, container){
     var elencoVie = [];
     var elencoCivici = [];
@@ -34,6 +34,7 @@ $(function() {
           $('input[name="via"]').select2('val', null);
           $('input[name="civico"]').select2('val', null);
           //$("#civico_geometry").val('');
+          comuneExtent = data.extent;
         }
       });
     });
@@ -268,13 +269,25 @@ var initMap = function(){
     });
 
     $('#center-button').on('click',function(){
-        var x = Math.round(parseFloat($('input[name="coordx"]').attr('value')));
-        var y = Math.round(parseFloat($('input[name="coordy"]').attr('value')));
-        if(x && y) {
-          var position = new OpenLayers.LonLat(x,y).transform("EPSG:3003","EPSG:3857");
-          btnPrint.movePrintBox(new OpenLayers.LonLat(x,y).transform("EPSG:3003","EPSG:3857"));
-          map.zoomToExtent(btnPrint.getBounds(),true);
-          //map.setCenter(position,22,false,false);
+        //SE NON C'È VIA CENTRO SU EXTENT DEL COMUNE
+        if($('input[name="via"]').select2('val') == ''){
+          map.zoomToExtent(OpenLayers.Bounds.fromString(comuneExtent));
+          return;
+          //console.log(coords);
+          //var ll = new OpenLayers.LonLat(coord[0],coord[1]).transform("EPSG:3003","EPSG:3857");
+          //var ur = new OpenLayers.LonLat(coord[2],coord[3]).transform("EPSG:3003","EPSG:3857");
+
+
+        }
+        else{
+          var x = Math.round(parseFloat($('input[name="coordx"]').attr('value')));
+          var y = Math.round(parseFloat($('input[name="coordy"]').attr('value')));
+          if(x && y) {
+            var position = new OpenLayers.LonLat(x,y).transform("EPSG:3003","EPSG:3857");
+            btnPrint.movePrintBox(new OpenLayers.LonLat(x,y).transform("EPSG:3003","EPSG:3857"));
+            map.zoomToExtent(btnPrint.getBounds(),true);
+            //map.setCenter(position,22,false,false);
+          }
         }
     })
 
