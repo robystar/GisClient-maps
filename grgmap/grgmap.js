@@ -204,7 +204,7 @@ var initMap = function(){
 
 
 
-
+    var updateCoords = true;
     var btnPrint = new OpenLayers.Control.PrintMap({
             tbarpos:"first", 
             //type: OpenLayers.Control.TYPE_TOGGLE, 
@@ -225,23 +225,26 @@ var initMap = function(){
                     $('input[name="scale"]').val(Math.round(this.printBoxScale));
                     $('input[name="boxw"]').val(Math.round(bounds.getWidth()));
                     $('input[name="boxh"]').val(Math.round(bounds.getHeight()));
-                    if(this.recenter){
+                    if(updateCoords){
                       $('input[name="coordx"]').val(Math.round(center.lon));
                       $('input[name="coordy"]').val(Math.round(center.lat));
                     }
+                    updateCoords = true;
+
                 }
 
             }
 
 
         });
-
     $('select[name="page_layout"]').change(function() {
         btnPrint.pageLayout = $(this).val();
+        updateCoords = false;
         btnPrint.updatePrintBox(false);
     });
     $('select[name="page_format"]').change(function() {
         btnPrint.pageFormat = $(this).val();
+        updateCoords = false;
         btnPrint.updatePrintBox(false);
     });
     $('select[name="page_legend"]').change(function() {

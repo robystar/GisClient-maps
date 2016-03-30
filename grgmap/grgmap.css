@@ -606,3 +606,8 @@ div.olMapViewport {
     border: 1px solid gray;
     margin-top:10px;
 }
+
+.olControlMousePosition{
+   margin-right:400px;
+
+}
