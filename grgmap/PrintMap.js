@@ -300,6 +300,8 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
         var boxW = this.map.size.w - this.offsetLeft - this.offsetRight - 2*this.margin;
         var boxH = this.map.size.h - this.offsetTop - this.offsetBottom - 2*this.margin;
 
+        console.log(this)
+
         var pageSize=this.pages[this.pageLayout][this.pageFormat];
         //si dovrebbero passare già in float
         var pageW = parseFloat(pageSize.w);

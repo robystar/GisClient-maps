@@ -277,8 +277,8 @@ var initMap = function(){
     })
 
     btnPrint.pageLayout = $('[name="page_layout"]').attr('value');
-    btnPrint.pageFormat = $('[name="page_format"]').attr('value');
     btnPrint.pageLegend = $('[name="page_legend"]').attr('value');
+    btnPrint.pageFormat = $('[name="page_format"]').attr('value');
 
     //ricarico i dati salvati
     var x = Math.round(parseFloat($('[name="coordx"]').attr('value')));
@@ -332,7 +332,7 @@ var initMap = function(){
     $.ajax({
       url: '/gisclient/services/gcmap.php',
       dataType: "jsonp",
-      data:{"mapset":"test"},
+      data:{"mapset":"mappagrg"},
       jsonpCallback: "jsoncallback",
       async: false,
       success: function( response ) {

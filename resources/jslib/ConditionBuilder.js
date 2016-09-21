@@ -1,7 +1,12 @@
 var ConditionBuilder = {
-    rootCondition: '<table>'+
-            '<tr><td class="seperator" ><img src="../resources/themes/icons/remove.png" alt="Remove" class="remove" /><select><option value="and">And</option><option value="or">Or</option></select></td>' +
-            '<td><div class="querystmts"></div><div><img class="add" src="../resources/themes/icons/add.png" alt="Add" /> <button class="addroot">+()</button></div>' +
+    
+
+    // **** baseUrl - Gisclient service URL
+    baseUrl : '/gisclient',
+    
+    rootCondition: '<table class="conditionbuilder">'+
+            '<tr><td class="seperator" ><select><option value="and">And</option><option value="or">Or</option></select></td>' +
+            '<td><div class="querystmts"><img src="../resources/themes/icons/qbuilder_del.png" alt="Remove" title="Rimuovi condizione" class="remove" /></div><div><img class="add" src="../resources/themes/icons/qbuilder_add.png" title="Aggiungi condizione" alt="Add" /> <img src="../resources/themes/icons/qbuilder_nested.png" alt="Add Nested" title="Aggiungi condizione annidata" class="addroot" /></div>' +
             '</td></tr></table>',
     
     operators: {
@@ -69,19 +74,20 @@ var ConditionBuilder = {
             elem = $(q[l - 1]);
         }
 
+        var tWidth = $(selector).width() ? $(selector).width() : 550;
         //If root element remove the close image
         if (isRoot) {
-            elem.find('td >.remove').detach();
+            elem.find('td > div >.remove').detach();
         }
         else {
-            elem.find('td >.remove').click(function () {
+            elem.find('td > div >.remove').click(function () {
                 // td>tr>tbody>table
                 $(this).parent().parent().parent().parent().detach();
             });
         }
         
         if(self.featureType) {
-            var statement = self.getConditionStatement();
+            var statement = self.getConditionStatement(tWidth);
 
             // Add the default staement segment to the root condition
             elem.find('td >.querystmts').append(statement);
@@ -116,7 +122,7 @@ var ConditionBuilder = {
                     },{
                         source: function(query, process) {
                             return $.ajax({
-                                url: '/gisclient/services/xSuggest.php',
+                                url: self.baseUrl + '/services/xSuggest.php',
                                 data: {
                                     suggest: query,
                                     field_id: fieldId
@@ -133,12 +139,12 @@ var ConditionBuilder = {
         } else console.log('no feature type');
     },
     
-    getConditionStatement: function() {
+    getConditionStatement: function(cWidth) {
         var len = this.featureType.properties.length, i, field,
             options = [], fieldOption,
             operator, statement, suggest;
 
-        statement = '<div cbcontainer="yes"><img src="../resources/themes/icons/remove.png" alt="Remove" class="remove" />'
+        statement = '<div cbcontainer="yes"><img src="../resources/themes/icons/qbuilder_del.png" alt="Remove" title="Rimuovi condizione" class="remove" />'
 
         suggest = false;
         for(i = 0; i < len; i++) {
@@ -170,7 +176,9 @@ var ConditionBuilder = {
 
         statement += '</select>';
 
-        statement += '<input type="text" /></div>';
+        //var inputWidth = $(.query).width() - 210;
+        var inputWidth = cWidth - 330 > 80 ? cWidth - 330 : 200;
+        statement += '<input type="text" style="width:'+ inputWidth +'px;"/></div>';
 
         return statement;
     },
@@ -230,7 +238,9 @@ var ConditionBuilder = {
     },
     
     getQuery: function(rootCondition) {
-        var condition = rootCondition || this.getCondition();
+        if (!rootCondition)
+            this.iterations = 0;
+        var condition = rootCondition || this.getCondition();        
         var op = [' ', condition.operator, ' '].join('');
         var values = {};
 
@@ -269,6 +279,8 @@ var ConditionBuilder = {
         var nlen = condition.nestedexpressions.length;
         for (var k = 0; k < nlen; k++) {
             var nestexpr = condition.nestedexpressions[k];
+            if (nestexpr.expressions.length == 0 && nestexpr.nestedexpressions.length == 0)
+                continue;
             var result = this.getQuery(nestexpr);
             n.push(result.query);
             $.extend(values, result.values);

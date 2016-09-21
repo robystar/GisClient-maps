@@ -1,10 +1,22 @@
 var GisClientMap; //POI LO TOGLIAMO!!!!
 var mycontrol,ismousedown;
 
+function adjustPanZoomBar(olControl, toolOffset){
+    var cZoom = $('.olControlPanZoomBar').offset();
+    if (toolOffset)
+    {
+        if (olControl.active)
+            $('.olControlPanZoomBar').offset({top: cZoom.top + toolOffset, left: cZoom.left } );
+        else
+            $('.olControlPanZoomBar').offset({top: cZoom.top - toolOffset, left: cZoom.left } );
+    }
+}
 
 var sidebarPanel = {
     closeTimeout: null,
     isOpened: false,
+    // **** Avoid ghost chicks from JQuery/Openlayers conflicts in mobile browsers
+    handleEvent: false,
     
     init: function(selector) {
         var self = this;
@@ -13,6 +25,8 @@ var sidebarPanel = {
         self.$element = $(selector);
         
         $('.panel-close', self.$element).click(function(){
+            GisClientMap.map.getControlsBy('id', 'button-layertree')[0].deactivate();
+            GisClientMap.map.getControlsBy('id', 'button-resultpanel')[0].deactivate();
             self.close();
         });
         $('.panel-expand', self.$element).click(function(){
@@ -20,6 +34,14 @@ var sidebarPanel = {
         });
         $('.panel-collapse', self.$element).click(function(){
             self.collapse();
+        });  
+
+        $('.panel-clearresults').hide();
+        
+        // **** Avoid ghost chicks from JQuery/Openlayers conflicts in mobile browsers
+        $("#map-sidebar").unbind('mouseup').mouseup(function(e){
+            self.handleEvent = true;
+            return false;
         });
     },
     
@@ -47,7 +69,10 @@ var sidebarPanel = {
     },
     
     open: function() {
-        if(this.closeTimeout) clearTimeout(this.closeTimeout);
+        if(this.closeTimeout) {
+            clearTimeout(this.closeTimeout);
+            this.closeTimeout = null;
+        }
         
         var el = $("#map-overlay-panel");
         //var w = width || 300;
@@ -131,7 +156,14 @@ var customCreateControlMarkup = function(control) {
 
 var initMap = function(){
     var map=this.map;
+    map.Z_INDEX_BASE['Popup'] = 1500;
+    map.Z_INDEX_BASE['Control'] = 1550;
+    var self = this;
+
     document.title = this.mapsetTitle;
+
+    var serviceURL = self.baseUrl + "services/";
+
 
     //SETTO IL BASE LAYER SE IMPOSTATO
     /*
@@ -146,7 +178,7 @@ var initMap = function(){
 
     sidebarPanel.init('#sidebar-panel');
 
-
+    
     //SE HO SETTATO LA NAVIGAZIONE VELOCE????
     if(this.mapsetTiles){
         for(i=0;i<map.layers.length;i++){
@@ -161,20 +193,17 @@ var initMap = function(){
 
        // console.log(this.activeLayers)
 
-        var chk = $("<input class='fast-navigate' type='checkbox'>");
-        $(".baseLbl").html("Livelli di base")
-        $(".dataLbl")
-        .html(" Naviga veloce sulla mappa")
-        .append(chk);
+        $(".dataLbl").html('<input type="checkbox" name="checkbox_fastNavigate" id="checkbox_fastNavigate" class="custom" data-mini="true"><label for="checkbox_fastNavigate">Attiva navigazione veloce</label>');
+        $("#checkbox_fastNavigate").checkboxradio();                     
+        $("#checkbox_fastNavigate").prop( "checked", true ).checkboxradio( "refresh" );
+                
         $(".dataLbl").append($("<div class='fast-navigate'>STAI NAVIGANDO SULLA MAPPA IMPOSTATA SUI LIVELLI VISIBILI IN AVVIO.<BR />DISATTIVA LA NAVIGAZIONE VELOCE PER TORNARE ALL'ALBERO DEI LIVELLI</div>"))
-        chk.attr("checked",true);
-
+        
         var self = this;
-        chk.on("click",function(){
-
+        $("#checkbox_fastNavigate").change(function(){
+              
             //SPENGO TUTTI I LAYERS IN OVERLAY ACCESI DOPO EVER MEMORIZZATO LA LISTA E ATTIVO LA NAVIGAZIONE VELOCE
-
-            if($(this).is(':checked')){
+            if(this.checked){
                 $(".dataLayersDiv").hide();
                 $("div.fast-navigate").show();
                 self.activeLayers = [];
@@ -195,14 +224,11 @@ var initMap = function(){
                     self.activeLayers[i].setVisibility(true);
                 }
             }
+            
+            $("#checkbox_fastNavigate").checkboxradio("refresh");
+        });
 
-
-
-        })
-
-
-
-  }
+    }
 
 /*
     var vectorEditor = new OpenLayers.Editor(map, {
@@ -215,14 +241,261 @@ var initMap = function(){
 
     //
     
-    if(ConditionBuilder) ConditionBuilder.init('.query');
+    if(ConditionBuilder) {
+        ConditionBuilder.baseUrl = self.baseUrl;
+    }
+    
+    var reportToolbar = new OpenLayers.GisClient.reportToolbar({
+        baseUrl: self.baseUrl,
+        createControlMarkup:customCreateControlMarkup,
+        //resultTarget:document.getElementById("resultpanel"),
+        //resultLayout:"TABLE",
+        div:document.getElementById("map-toolbar-report"),
+        autoActivate:false,
+        saveState:true,
+        rowsPerPage: 200,
+        selectedCols: [],
+        filterButtonHander: function (event) {
+            
+            var selectedReport =  $('select.olControlReportMapSelect').val();
+
+            if(selectedReport < 1){
+                return alert('Nessun modello di report selezionato');
+            }
+            
+            var reportDef = reportToolbar.getReportDef(selectedReport);
+            
+            if (!reportDef) {
+                return alert('Defininzione del modello di report non trovata, ID: ' + selectedReport);
+            }
+
+            if(ConditionBuilder) {
+                ConditionBuilder.init('.query-report');
+                ConditionBuilder.setFeatureType(reportDef);
+             }
+                
+            var form = '',
+                len = reportDef.properties.length, property, i;
+            
+            $('#searchReportTitle').html('Filtra Report '+reportDef.title);
+            
+            //form += '<form role="form">';
+            form += '<table>';
+            
+            for(i = 0; i < len; i++) {
+                property = reportDef.properties[i];
+                
+                if(!property.searchType) continue; //searchType undefined oppure 0
+                
+                //form += '<div class="form-group">'+
+                //            '<label for="search_form_input_'+i+'">'+property.header+'</label>';
+                form += '<tr><td>'+property.header+'</td><td>';
+                
+                switch(property.searchType) {
+                    case 1:
+                    case 2: //testo
+                        form += '<input type="text" name="'+property.name+'" searchType="'+property.searchType+'" class="form-control" id="search_form_input_'+i+'">';
+                    break;
+                    case 3: //lista di valori
+                        form += '<input type="text" name="'+property.name+'" fieldId="'+property.fieldId+'" fieldFilter="'+property.fieldFilter+'" searchType="'+property.searchType+'" id="search_form_input_'+i+'"  style="width:300px;">';
+                    break;
+                    case 4: //numero
+                        form += '<div class="form-inline">'+
+                            '<select name="'+property.name+'_operator" class="form-control">'+
+                            '<option value="=">=</option>'+
+                            '<option value="<>">!=</option>'+
+                            '<option value="<">&lt;</option>'+
+                            '<option value=">">&gt;</option>'+
+                            '</select>'+
+                            '<input type="number" name="'+property.name+'" searchType="'+property.searchType+'" class="form-control" id="search_form_input_'+i+'">'+
+                            '</div>';
+                    break;
+                    case 5: //data
+                        form += '<input type="date" name="'+property.name+'" searchType="'+property.searchType+'" class="form-control" id="search_form_input_'+i+'">';
+                    break;
+                    case 6: //lista di valori non wfs
+                        form += '<input type="number" name="'+property.name+'" searchType="'+property.searchType+'" fieldFilter="'+property.fieldFilter+'" id="search_form_input_'+i+'" style="width:300px;">';
+                    break;
+                }
+                
+                //form += '</div>';
+                form += '</td></tr>';
+            }
+            form += '</table>';
+
+            form += '<button type="submit" class="btn btn-default ui-btn ui-shadow ui-corner-all">Filtra</button>'+
+                '</form>';
+             
+            $('#ricerca-report').empty().append(form);
+         
+            $('#ricerca-report input[searchType="3"],#ricerca-report input[searchType="6"]').each(function(e, input) {
+                var fieldId = $(input).attr('fieldId');
+                var fieldFilter = $(input).attr('fieldFilter');
+                        
+                $(input).select2({
+                    minimumInputLength: 0,
+                    query: function(query) {
+                        var filterValue = null;
+
+                        if (fieldFilter !== 'undefined'){
+                            if (typeof $('#ricerca-report input[fieldId="'+fieldFilter+'"]').select2('data') !== "undefined" && $('#ricerca-report input[fieldId="'+fieldFilter+'"]').select2('data') !== null)
+                                filterValue =  $('#ricerca-report input[fieldId="'+fieldFilter+'"]').select2('data').text;
+                        }
+                        if (typeof $('#ricerca-report input[fieldIFilter="'+fieldId+'"]').select2('data') !== "undefined" && $('#ricerca-report input[fieldFilter="'+fieldId+'"]').select2('data') !== null)
+                            $('#ricerca-report input[fieldFilter="'+fieldId+'"]').select2('data', null);
+                        
+                        $.ajax({
+                            url: self.baseUrl + 'services/xRpSuggest.php',
+                            data: {
+                                suggest: query.term,
+                                field_id: fieldId,
+                                filtervalue: filterValue
+        },
+                            dataType: 'json',
+                            success: function(data) {
+                                var results = [];
+                                $.each(data.data, function(e, val) {
+                                    results.push({
+                                        id: val.value,
+                                        text: val.value
+                                    });
+                                });
+                                query.callback({results:results});
+                            }
+                        });
+                    }
+                });
+            });
+             
+            $('#ricerca-report button[type="submit"]').click(function(event) {
+                event.preventDefault();
+                
+                
+                var query = '';
+                var values = {};
+                var par_idx = 0;
+                
+                $('#ricerca-report input').each(function(e, input) {
+                    var name = $(input).attr('name'),
+                        value = $(input).val(),
+                        searchType = $(input).attr('searchType'),
+                        type = '=',
+                        param_x = ':param_' + par_idx;
+                        
+                    if(!value || value == '') return;
+                    
+                    if(searchType == 4) {
+                        type = $('#ricerca input[name="'+name+'_operator"]').val();
+                    }
+                    if(searchType == 2) {
+                        type = 'ILIKE';
+                        value = '%'+value+'%';
+                    }
+                    
+                    if (query.length > 0) query += ' AND ';
+                    
+                    query += name + ' ' + type + ' ' + param_x;
+                    values[param_x] = value;
+                    
+                    par_idx++;
+                });
+                
+                if(query.length == 0) return alert('Specificare almeno un parametro di ricerca');
+                
+                reportToolbar.displayReportHandler({'query': query, 'values': values});
+
+                $('#SearchReportWindow').modal('hide');
+            });
+        
+            $('#SearchReportWindow').modal('show');
+        
+
+        },
+        eventListeners: {
+            'initreport': function(event) {
+                    var self = this;
+                    var reportDef = event.reportDef,
+                        len = reportDef.properties.length, i, property,
+                        table = '<table id="reportTbl"><thead><tr>', 
+                        exportLinks = ' <a href="#" class="reportTbl_export" action="xls" reportID="' + event.reportID + '" ><img src="../resources/themes/icons/xls.gif">&nbsp;Esporta in Excel</a>'
+                                    + ' <a href="#" class="reportTbl_export" action="pdf" reportID="' + event.reportID + '" ><img src="../resources/themes/icons/acrobat.gif">&nbsp;Esporta in PDF</a>',
+                        cols = [], col, j,
+                        results, result, value, title;
+                    
+                    table =  exportLinks + table;
+                   // **** Insert ID column
+                   table += '<th>ID</th>';
+                   self.selectedCols.push('gc_objid');
+                    for(i = 0; i < len; i++) {
+                        property = reportDef.properties[i];
+                        title = property.header || property.name;
+                        table += '<th>'+title+'</th>';
+                        self.selectedCols.push(property.name);
+                    }
+                    table += '</tr></thead><tbody>';
+
+                    table += '</tr>';
+                    
+                    table += '</tbody></table>';
+
+                    $('#DetailsWindow div.modal-body').html(table);
+                    $('#DetailsWindow h4.modal-title').html('Report ' + reportDef.title);
+                    $('#DetailsWindow').modal('show');
+                    
+                    self.getReportData(event.reportID, self.currentPage, event.filter);
+                    
+                    $('.reportTbl_export').click(function() {
+                        var action = this.getAttribute('action');
+                        var reportID = this.getAttribute('reportID');
+                        var me = self;
+                        me.exportReport(reportID, action, event.filter);
+                    });
+                    
+                    $("#DetailsWindow").scroll(function() {
+                        var me = self;
+                        if (me.totalRows <= me.currentPage*me.rowsPerPage)
+                            return;
+                        var docViewTop = $("#DetailsWindow").scrollTop();
+                        var rowMarker = $("#reportTbl tr").eq($("#reportTbl > tbody > tr").length - me.rowsPerPage/4);
+                        if (rowMarker) {
+                            var elemTop = rowMarker[0].offsetTop;
+                            if (elemTop <= docViewTop && me.dataLoading == false){
+                                me.currentPage += 1;
+                                    me.getReportData(event.reportID, self.currentPage, event.filter);
+                            }
+                        }
+                    });
+                },
+           'insertrows': function (data) {
+               var row, col, value, rowHtml;
+               var table = $("#reportTbl > tbody:last");
+               for(i = 0; i < data.length; i++) {
+                   row = data[i];
+                   rowHtml = '<tr>';
+                   for(var j = 0; j < this.selectedCols.length; j++) {
+                        col = this.selectedCols[j];
+                        value = row[col] || '';
+
+                        rowHtml += '<td>'+value+'</td>';
+                   }
+                   rowHtml += '</tr>';
+                   table.append(rowHtml);
+                }
+           }    
+        }
+    });
+    map.addControl(reportToolbar);
+    
     var queryToolbar = new OpenLayers.GisClient.queryToolbar({
+        baseUrl: self.baseUrl,
         createControlMarkup:customCreateControlMarkup,
         resultTarget:document.getElementById("resultpanel"),
         resultLayout:"TABLE",
         div:document.getElementById("map-toolbar-query"),
         autoActivate:false,
         saveState:true,
+        maxWfsFeatures:MAX_LAYER_FEATURES,
+        maxVectorFeatures:MAX_QUERY_FEATURES,
         eventListeners: {
             //'startQueryMap': function() { sidebarPanel.show('resultpanel');},
             'endQueryMap': function(event) {        //Aggiungo l'animazione (???? da spostare sulla pagina)
@@ -236,6 +509,8 @@ var initMap = function(){
                     if(event.vectorFeaturesOverLimit) {
                         alert('I risultati dell\'interrogazione sono troppi: alcuni oggetti non sono stati disegnati su mappa ');
                     }
+                    
+                    $('.panel-clearresults').show();
                     //console.log(event.mode);
                     //console.log(event.layer.getDataExtent());
                     if(event.mode == 'fast') {
@@ -246,12 +521,17 @@ var initMap = function(){
                 }
             },
             'featureTypeSelected': function(fType) {
-                if(ConditionBuilder) {
-                    ConditionBuilder.setFeatureType(fType);
-                }
+                
             },
             'featureselected': function(event) {
 
+                var self = this;
+                if(self.popupOpenTimeout) {
+                    clearTimeout(self.popupOpenTimeout);
+                    self.popupOpenTimeout = null;
+                    self.removePopup(event);
+                }
+                
                 var feature = event.feature,
                     featureType = feature.featureTypeName;
 
@@ -287,16 +567,24 @@ var initMap = function(){
                 $('#resultpanel tr[featureType="'+featureType+'"][featureId="'+feature.id+'"]').css('background-color', 'white');
             },
             'featurehighlighted': function(event) {
-                var feature = event.feature,
-                    featureTypeName = feature.featureTypeName,
-                    featureType = GisClientMap.getFeatureType(featureTypeName);
+                var feature = event.feature;
 
-                if(featureType && featureType.title) {
-                    $('#sidebar-panel div.panel-title').html(featureType.title);
+                var self = this;
+                var queryResLayer = map.getLayersByName("wfsResults")[0];
+                if (queryResLayer.selectedFeatures.indexOf(feature) < 0 && POPUP_TIMEOUT > 0)
+                {
+                    self.popupOpenTimeout = setTimeout(function() {
+                        if (self.popup)
+                            self.map.addPopup(self.popup);
+                    }, POPUP_TIMEOUT);
                 }
             },
             'featureunhighlighted': function(event) {
-                $('#sidebar-panel div.panel-title').empty();
+                var self = this;
+                if(self.popupOpenTimeout) {
+                    clearTimeout(self.popupOpenTimeout);
+                    self.popupOpenTimeout = null;
+                }
             },
             'viewdetails': function(event) {
                 var featureType = event.featureType,
@@ -364,6 +652,11 @@ var initMap = function(){
             fType = GisClientMap.getFeatureType(selectedFeatureType);
             if(!fType) return alert('Errore: il featureType '+selectedFeatureType+' non esiste');
             
+            if(ConditionBuilder) {
+                ConditionBuilder.init('.query');
+                ConditionBuilder.setFeatureType(fType);
+            }
+            
             var form = '',
                 properties = fType.properties, 
                 len = properties.length, property, i;
@@ -388,7 +681,7 @@ var initMap = function(){
                         form += '<input type="text" name="'+property.name+'" searchType="'+property.searchType+'" class="form-control" id="search_form_input_'+i+'">';
                     break;
                     case 3: //lista di valori
-                        form += '<input type="text" name="'+property.name+'" fieldId="'+property.fieldId+'" searchType="'+property.searchType+'" id="search_form_input_'+i+'"  style="width:300px;">';
+                        form += '<input type="text" name="'+property.name+'" fieldId="'+property.fieldId+'" fieldFilter="'+property.fieldFilter+'" searchType="'+property.searchType+'" id="search_form_input_'+i+'"  style="width:300px;">';
                     break;
                     case 4: //numero
                         form += '<div class="form-inline">'+
@@ -405,7 +698,7 @@ var initMap = function(){
                         form += '<input type="date" name="'+property.name+'" searchType="'+property.searchType+'" class="form-control" id="search_form_input_'+i+'">';
                     break;
                     case 6: //lista di valori non wfs
-                        form += '<input type="number" name="'+property.name+'" searchType="'+property.searchType+'" id="search_form_input_'+i+'" style="width:300px;">';
+                        form += '<input type="number" name="'+property.name+'" searchType="'+property.searchType+'" fieldFilter="'+property.fieldFilter+'" id="search_form_input_'+i+'" style="width:300px;">';
                     break;
                 }
                 
@@ -417,22 +710,33 @@ var initMap = function(){
             if(mode == 'default') {
                 form += '<div class="form-group"><input type="checkbox" name="use_current_extent" gcfilter="false"> Filtra sull\'extent attuale</div>';
             }
-            form += '<button type="submit" class="btn btn-default">Cerca</button>'+
+            form += '<button type="submit" class="btn btn-default ui-btn ui-shadow ui-corner-all">Cerca</button>'+
                 '</form>';
             
             $('#ricerca').empty().append(form);
             
             $('#ricerca input[searchType="3"],#ricerca input[searchType="6"]').each(function(e, input) {
                 var fieldId = $(input).attr('fieldId');
-                
+                var fieldFilter = $(input).attr('fieldFilter');
+                        
                 $(input).select2({
                     minimumInputLength: 0,
                     query: function(query) {
+                        var filterValue = null;
+
+                        if (fieldFilter !== 'undefined'){
+                            if (typeof $('#ricerca input[fieldId="'+fieldFilter+'"]').select2('data') !== "undefined" && $('#ricerca input[fieldId="'+fieldFilter+'"]').select2('data') !== null)
+                                filterValue =  $('#ricerca input[fieldId="'+fieldFilter+'"]').select2('data').text;
+                        }
+                        if (typeof $('#ricerca input[fieldIFilter="'+fieldId+'"]').select2('data') !== "undefined" && $('#ricerca input[fieldFilter="'+fieldId+'"]').select2('data') !== null)
+                            $('#ricerca input[fieldFilter="'+fieldId+'"]').select2('data', null);
+                        
                         $.ajax({
-                            url: '/gisclient/services/xSuggest.php',
+                            url: self.baseUrl + 'services/xSuggest.php',
                             data: {
                                 suggest: query.term,
-                                field_id: fieldId
+                                field_id: fieldId,
+                                filtervalue: filterValue
                             },
                             dataType: 'json',
                             success: function(data) {
@@ -497,9 +801,19 @@ var initMap = function(){
                 }
                 
                 var control = GisClientMap.map.getControlsByClass('OpenLayers.Control.QueryMap')[0];
+                var oldQueryFeatureType = null;
+                var oldOnlyVisibleLayers = null;
+                var oldLayers = null;
+                
                 if(mode == 'fast') {
+                    oldLayers = control.layers;
+                    oldQueryFeatureType = control.queryFeatureType;
+                    oldOnlyVisibleLayers = control.onlyVisibleLayers;
                     control.layers = [queryToolbar.getLayerFromFeature(fType.typeName)];
+                    control.queryFeatureType = fType.typeName;
+                    control.onlyVisibleLayers = false;
                 }
+                
                 var oldQueryFilters = control.queryFilters[fType.typeName];
                 control.queryFilters[fType.typeName] = filter;
                 //var oldHighlight = control.highLight;
@@ -508,6 +822,11 @@ var initMap = function(){
                 control.select(geometry, mode);
                 
                 control.queryFilters[fType.typeName] = oldQueryFilters;
+                if (mode == 'fast'){
+                    control.layers = oldLayers;
+                    control.queryFeatureType = oldQueryFeatureType;
+                    control.onlyVisiblelayers = oldOnlyVisibleLayers;
+                }
                 //control.highLight = oldHighlight;
 
                 $('#SearchWindow').modal('hide');
@@ -527,7 +846,9 @@ var initMap = function(){
         event.preventDefault();
         
         queryToolbar.clearResults();
-        
+        if ($('#resultpanel').is(":visible"))
+            sidebarPanel.hide();
+        this.style.display = 'none';
         //sidebarPanel.close();
     });
 
@@ -563,7 +884,7 @@ var initMap = function(){
         }
     });
 
-
+    var isGeodesicMeasure = (this.map.projection == 'EPSG:3857' || this.map.projection == 'EPSG:4326')?true:false;
 
     var measureToolbar = new OpenLayers.Control.Panel({
         createControlMarkup:customCreateControlMarkup,
@@ -576,12 +897,14 @@ var initMap = function(){
                 iconclass:"glyphicon-white glyphicon-resize-horizontal", 
                 text:"Misura distanza", 
                 title:"Misura distanza",
+                geodesic:isGeodesicMeasure,
                 eventListeners: {'activate': function(){map.currentControl.deactivate();map.currentControl=this}}
             }),
             new OpenLayers.Control.DynamicMeasure(OpenLayers.Handler.Polygon,{
                 iconclass:"glyphicon-white glyphicon-retweet", 
                 text:"Misura superficie", 
                 title:"Misura superficie",
+                geodesic:isGeodesicMeasure,
                 eventListeners: {'activate': function(){map.currentControl.deactivate();map.currentControl=this}}
             })
         ]
@@ -636,14 +959,29 @@ var initMap = function(){
     var pSelect = new OpenLayers.Control.PIPESelect(
             OpenLayers.Handler.Click,
             {
-                clearOnDeactivate:false,
-                serviceURL:'../../services/iren/findPipes.php',
+                clearOnDeactivate:true,
+                serviceURL:self.baseUrl + 'services/iren/findPipes.php',
                 distance:50,
                 highLight: true,
                 iconclass:"glyphicon-white glyphicon-tint", 
                 tbarpos:"last", 
                 title:"Ricerca valvole",
-                eventListeners: {'activate': function(){map.currentControl.deactivate();map.currentControl=this}}
+                trigger: function() {
+                    if (sidebarPanel.handleEvent)
+                    {
+                        if (this.active) {
+                            this.deactivate();
+                        }
+                        else
+                        {
+                            sidebarPanel.close();
+                            map.currentControl.deactivate();
+                            map.currentControl=this;
+                            this.activate();
+                        }
+                        sidebarPanel.handleEvent = false;
+                    }
+                }
             }
         );
 
@@ -654,7 +992,9 @@ var initMap = function(){
         createControlMarkup:customCreateControlMarkup
     });
     
-    var defaultControl = new OpenLayers.Control.DragPan({iconclass:"glyphicon-white glyphicon-move", title:"Sposta", eventListeners: {'activate': function(){map.currentControl && map.currentControl.deactivate();map.currentControl=this}}});
+    var defaultControl = new OpenLayers.Control.DragPan({iconclass:"glyphicon-white glyphicon-move", title:"Sposta", eventListeners: {'activate': function(){
+                map.currentControl && map.currentControl.deactivate();
+                map.currentControl=this}}});
     map.defaultControl = defaultControl;
     
     var geolocateControl = new OpenLayers.Control.Geolocate({
@@ -667,13 +1007,23 @@ var initMap = function(){
             enableHighAccuracy: true, // required to turn on gps requests!
             maximumAge: 3000,
             timeout: 50000
+        },
+        eventListeners: {
+            'activate': function(){
+                var self=this;
+                self.panel_div.innerHTML +='<span class="floating-message">Rilevamento posizione in corso</span>';
+            }
         }
     });
     geolocateControl.events.register('locationfailed', self, function() {
-        alert('Impossibile ottenere la posizione dal GPS');
+        alert('Posizione GPS non acquisita');
+        $('.floating-message').remove();
+        map.getControlsByClass("OpenLayers.Control.Geolocate")[0].deactivate();
     });
     geolocateControl.events.register('locationuncapable', self, function() {
-        alert('Impossibile ottenere la posizione dal GPS');
+        alert('Acquisizione della posizione GPS non supportata dal browser');
+        $('.floating-message').remove();
+        map.getControlsByClass("OpenLayers.Control.Geolocate")[0].deactivate();
     });
     geolocateControl.events.register('locationupdated', self, function(event) {
         var point = event.point;
@@ -689,7 +1039,14 @@ var initMap = function(){
     sideBar.addControls([
         //new OpenLayers.Control.ZoomIn({tbarpos:"first", iconclass:"glyphicon-white glyphicon-white glyphicon-plus", title:"Zoom avanti"}),
 
-        new OpenLayers.Control.ZoomBox({tbarpos:"first", iconclass:"glyphicon-white glyphicon-zoom-in", title:"Zoom riquadro", eventListeners: {'activate': function(){map.currentControl && map.currentControl.deactivate();map.currentControl=this}}}),
+        new OpenLayers.Control.ZoomBox({tbarpos:"first", iconclass:"glyphicon-white glyphicon-zoom-in", title:"Zoom riquadro", eventListeners: {
+                'activate': function(){
+                    map.currentControl && map.currentControl.deactivate();
+                    map.getControlsByClass("OpenLayers.Control.TouchNavigation")[0].dragPan.deactivate();
+                    map.currentControl=this},
+                'deactivate': function(){
+                    map.getControlsByClass("OpenLayers.Control.TouchNavigation")[0].dragPan.activate();}
+            }}),
         new OpenLayers.Control.ZoomOut({iconclass:"glyphicon-white glyphicon-zoom-out", title:"Zoom indietro"}),
         defaultControl,
         new OpenLayers.Control.Button({
@@ -704,43 +1061,115 @@ var initMap = function(){
         geolocateControl,
 
         btnSearch = new OpenLayers.Control.Button({
-            type: OpenLayers.Control.TYPE_TOGGLE, 
             iconclass:"glyphicon-white  glyphicon-info-sign", 
             title:"Pannello di ricerca",
             tbarpos:"first",
-            eventListeners: {
-                'activate': function(){queryToolbar.activate();},
-                'deactivate': function(){queryToolbar.deactivate();}
-            }
+            trigger: function() {
+                if (sidebarPanel.handleEvent)
+                {
+                    if (this.active) {
+                        this.deactivate();
+                        queryToolbar.deactivate();
+                        //adjustPanZoomBar(queryToolbar, 60);
+                    }
+                    else
+                    {
+                        this.activate();
+                        queryToolbar.activate();
+                        queryToolbar.controls[0].activate();
+                        //adjustPanZoomBar(queryToolbar, 60);
+                        
+                    }
+                    sidebarPanel.handleEvent = false;
+                }
+            }  
         }),
         btnLayertree = new OpenLayers.Control.Button({
-            type: OpenLayers.Control.TYPE_TOGGLE,
+            id: 'button-layertree',
             exclusiveGroup: 'sidebar',
             iconclass:"icon-layers", 
             title:"Pannello dei livelli",
-            eventListeners: {
-                'activate': function(){sidebarPanel.show('layertree');},
-                'deactivate': function(){sidebarPanel.hide('layertree');}
-            }
+            trigger: function() {
+                if (sidebarPanel.handleEvent)
+                {
+                    if (this.active) {
+                        this.deactivate();
+                        sidebarPanel.hide('layertree');
+                    }
+                    else
+                    {
+                        this.activate();
+                        sidebarPanel.show('layertree');
+                    }
+                    sidebarPanel.handleEvent = false;
+                }
+            }  
         }),
         btnResult = new OpenLayers.Control.Button({
-            type: OpenLayers.Control.TYPE_TOGGLE, 
+            id: 'button-resultpanel',
             exclusiveGroup: 'sidebar',
             iconclass:"glyphicon-white glyphicon-list-alt", 
             title:"Tabella dei risultati",
+            trigger: function() {
+                if (sidebarPanel.handleEvent)
+                {
+                    if (this.active) {
+                        this.deactivate();
+                        sidebarPanel.hide('resultpanel');
+                    }
+                    else
+                    {
+                        this.activate();
+                        sidebarPanel.show('resultpanel');
+                    }
+                    sidebarPanel.handleEvent = false;
+                }
+            }  
+        }),
+        
+        btnReport = new OpenLayers.Control.Button({
+            iconclass:"glyphicon-white  glyphicon-stats", 
+            title:"Pannello di visualizzazione reports",
             tbarpos:"last",
-            eventListeners: {
-                'activate': function(){sidebarPanel.show('resultpanel');},
-                'deactivate': function(){sidebarPanel.hide('resultpanel');}
-            }
+            trigger: function() {
+                if (sidebarPanel.handleEvent)
+                {
+                    if (this.active) {
+                        this.deactivate();
+                        reportToolbar.deactivate();
+                        //adjustPanZoomBar(reportToolbar, 60);
+                    }
+                    else
+                    {
+                        this.activate();
+                        reportToolbar.activate();
+                        //queryToolbar.controls[0].activate();
+                        //adjustPanZoomBar(reportToolbar, 60);
+                        
+                    }
+                    sidebarPanel.handleEvent = false;
+                }
+            }  
         }),
 
-        new OpenLayers.Control.Button({tbarpos:"first",iconclass:"glyphicon-white glyphicon-resize-small", type: OpenLayers.Control.TYPE_TOGGLE, title:"Misure",
-
-            eventListeners: {
-                'activate': function(){measureToolbar.activate();},
-                'deactivate': function(){measureToolbar.deactivate();}
-            }
+        new OpenLayers.Control.Button({tbarpos:"first",iconclass:"glyphicon-white glyphicon-resize-small", title:"Misure",
+            trigger: function() {
+                if (sidebarPanel.handleEvent)
+                {
+                    if (this.active) {
+                        this.deactivate();
+                        measureToolbar.deactivate();
+                        //adjustPanZoomBar(measureToolbar, 27);
+                    }
+                    else
+                    {
+                        this.activate();
+                        measureToolbar.activate();
+                        //adjustPanZoomBar(measureToolbar, 27);
+                    }
+                    sidebarPanel.handleEvent = false;
+                }
+            }  
         }),
 
 /*
@@ -753,12 +1182,24 @@ var initMap = function(){
         }),
         
    */     
-        new OpenLayers.Control.Button({iconclass:"glyphicon-white glyphicon-pencil", type: OpenLayers.Control.TYPE_TOGGLE, title:"Redline",
-
-            eventListeners: {
-                'activate': function(){redlineToolbar.activate();},
-                'deactivate': function(){redlineToolbar.deactivate();}
-            }
+        new OpenLayers.Control.Button({iconclass:"glyphicon-white glyphicon-pencil", title:"Redline",
+            trigger: function() {
+                if (sidebarPanel.handleEvent)
+                {
+                    if (this.active) {
+                        this.deactivate();
+                        redlineToolbar.deactivate();
+                        //adjustPanZoomBar(redlineToolbar, 27);
+                    }
+                    else
+                    {
+                        this.activate();
+                        redlineToolbar.activate();
+                        //adjustPanZoomBar(redlineToolbar, 27);
+                    }
+                    sidebarPanel.handleEvent = false;
+                }
+            }      
         }),
         
         pSelect,
@@ -766,37 +1207,62 @@ var initMap = function(){
         btnPrint = new OpenLayers.Control.PrintMap({
             tbarpos:"first", 
             //type: OpenLayers.Control.TYPE_TOGGLE, 
+            baseUrl:self.baseUrl,
+            defaultLayers: self.mapsetTiles?self.activeLayers.slice(0):[],
             formId: 'printpanel',
             exclusiveGroup: 'sidebar',
             iconclass:"glyphicon-white glyphicon-print", 
             title:"Pannello di stampa",
             waitFor: 'panelready',
-            eventListeners: {
-                'activate': function(){
-                    var me = this;
-                    
-                    if($.trim($('#printpanel').html()) == '') {
-                        $("#printpanel").load('print_panel.html', function() {
-                            me.events.triggerEvent('panelready');
-                        });
+            defaultTemplateHTML: PRINT_TEMPLATE_HTML,
+            defaultTemplatePDF: PRINT_TEMPLATE_PDF,
+            trigger: function() {
+                if (sidebarPanel.handleEvent)
+                {
+                    if (this.active) {
+                        this.deactivate();
+                        sidebarPanel.hide('printpanel');
                     }
-                    sidebarPanel.show('printpanel');
-                },
-                'deactivate': function(){
-                    sidebarPanel.hide('printpanel');
+                    else
+                    {
+                        this.activate();
+                        var me = this;
+                    
+                        if($.trim($('#printpanel').html()) == '') {
+                            $("#printpanel").load('print_panel.html', function() {
+                                me.events.triggerEvent('panelready');
+                            });
+                        }
+                        else {
+                            this.drawPrintArea();
+                        }
+                            
+                        sidebarPanel.show('printpanel');
+                    }
+                    sidebarPanel.handleEvent = false;
                 }
-            }
+            }      
         }),
         
-        new OpenLayers.Control.Button({
-            type: OpenLayers.Control.TYPE_TOGGLE, 
+        new OpenLayers.Control.Button({ 
             iconclass:"glyphicon-white  glyphicon-eye-open", 
             title:"Mappa di riferimento",
             tbarpos:"last",
-            eventListeners: {
-                'activate': function(){GisClientMap.overviewMap.show();},
-                'deactivate': function(){GisClientMap.overviewMap.hide();}
-            }
+            trigger: function() {
+                if (sidebarPanel.handleEvent)
+                {
+                    if (this.active) {
+                        this.deactivate();
+                        GisClientMap.overviewMap.hide();
+                    }
+                    else
+                    {
+                        this.activate();
+                        GisClientMap.overviewMap.show();
+                    }
+                    sidebarPanel.handleEvent = false;
+                }
+            }      
         })
         
    /*     
@@ -834,7 +1300,8 @@ var initMap = function(){
         option = $("<option></option>");
         option.val(zoomLevel);
         zoomLevel += 1;
-        option.text('Scala 1:'+ parseInt(scale));
+        scale = scale<1001?Math.round(scale/10)*10:Math.round(scale/1000)*1000;
+        option.text('Scala 1:'+ scale);
         $('#map-select-scale').append(option);
     }
     $('#map-select-scale').val(map.getZoom());
@@ -843,6 +1310,8 @@ var initMap = function(){
     });
     map.events.register('zoomend', null, function(){
         $('#map-select-scale').val(map.getZoom());
+        if (queryToolbar.active)
+            queryToolbar.redraw();
     });
 
 
@@ -883,12 +1352,12 @@ var initMap = function(){
             e.preventDefault();
 
             $.ajax({
-                url: '/gisclient/login.php',
+                url: self.baseUrl + 'login.php',
                 type: 'POST',
                 dataType: 'json',
                 data: {
                     username: $('#LoginWindow input[name="username"]').val(),
-                    password: $('#LoginWindow input[name="password"]').val()
+                    password: md5($('#LoginWindow input[name="password"]').val())
                 },
                 success: function(response) {
                     if(response && typeof(response) == 'object' && response.result == 'ok') {
@@ -914,7 +1383,7 @@ var initMap = function(){
         event.preventDefault();
         
         $.ajax({
-            url: '/gisclient/logout.php',
+            url: self.baseUrl + 'logout.php',
             type: 'POST',
             dataType: 'json',
             success: function(response) {
@@ -984,26 +1453,26 @@ var initMap = function(){
     });
 
     OpenLayers.ImgPath = "../resources/themes/openlayers/img/";
-    GisClientMap = new OpenLayers.GisClient('/gisclient/services/gcmap.php' + window.location.search,'map',{
+    var GisClientBaseUrl = GISCLIENT_URL + "/"
+    GisClientMap = new OpenLayers.GisClient(GisClientBaseUrl + 'services/gcmap.php' + window.location.search,'map',{
         useMapproxy:true,
-        mapProxyBaseUrl:"/ows",
+        mapProxyBaseUrl:MAPPROXY_URL,
+        baseUrl: GisClientBaseUrl,
         mapOptions:{
             controls:[
-                new OpenLayers.Control.Navigation(),
+                //new OpenLayers.Control.Navigation(),
                 new OpenLayers.Control.Attribution(),
                 new OpenLayers.Control.LoadingPanel(),
-                new OpenLayers.Control.PanZoomBar(),
+                //new OpenLayers.Control.PanZoomBar(),
                 new OpenLayers.Control.ScaleLine(),
-                /*
                 new OpenLayers.Control.TouchNavigation({
                     dragPanOptions: {
                         enableKinetic: true
                     }
                 }),
                 //new OpenLayers.Control.PinchZoom(),
-*/
                 new OpenLayers.Control.LayerTree({
-                    emptyTitle:'Base vuota', 
+                    emptyTitle:'', 
                     div:OpenLayers.Util.getElement('layertree-tree')
                 }),
                 layerLegend
@@ -1041,4 +1510,13 @@ OpenLayers.GisClient.Toolbar = OpenLayers.Class(OpenLayers.Control.Panel, {
         OpenLayers.Control.Panel.prototype.activateControl.apply(this, [control]);
     }
 });
-
+/*
+$(document).on('pagebeforeshow', null, function(){       
+    $(document).on('click', null,function(e) {
+        alert('Button click');
+    }); 
+    $(document).on('mouseup', null,function(e) {
+        alert('Button click');
+    }); 
+});
+*/

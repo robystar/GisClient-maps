@@ -78,7 +78,7 @@ OpenLayers.Control.LayerTree = OpenLayers.Class(OpenLayers.Control.LayerSwitcher
     getNode: function(layer){
 
         var layerTree = layer.isBaseLayer? this.baseTree :this.overlayTree;
-        return jQuery(layerTree).tree('find',layer.id);
+        return jQuery(layerTree).collapsibletree('find',layer.id);
 
     },
 
@@ -133,7 +133,8 @@ OpenLayers.Control.LayerTree = OpenLayers.Class(OpenLayers.Control.LayerSwitcher
     redraw: function(e) {
         //if the state hasn't changed since last redraw, no need
         // to do anything. Just return the existing div.
-
+        
+        var azz = $(this.div).css("width");
         if (!this.checkRedraw()) {
             return this.div;
         }
@@ -204,8 +205,8 @@ OpenLayers.Control.LayerTree = OpenLayers.Class(OpenLayers.Control.LayerSwitcher
 
         if(!this.overlayTree) return;
 
-        var node = jQuery(this.overlayTree).tree('find',layer.id);
-        var childs = jQuery(this.overlayTree).tree('getChildren',node.target);
+        var node = jQuery(this.overlayTree).collapsibletree('find',layer.id);
+        var childs = jQuery(this.overlayTree).collapsibletree('getChildren',node);
         if(childs.length > 0){
             var layers = [];
             var childs_ext = [];
@@ -246,13 +247,13 @@ OpenLayers.Control.LayerTree = OpenLayers.Class(OpenLayers.Control.LayerSwitcher
     checkNodeState: function(layer){
         var self = this;
         var inRange;
-        var node = self.overlayTree.tree('find',layer.id);
+        var node = self.overlayTree.collapsibletree('find',layer.id);
         var skipIndex = 0;
         
         if(node){
             inRange = layer.inRange;
             self.changeNodeState(node,inRange);
-            jQuery.each(self.overlayTree.tree('getChildren',(node.target)),function(index,childNode){
+            jQuery.each(self.overlayTree.collapsibletree('getChildren',(node)),function(index,childNode){
                 if (layer.nodes && layer.nodes[index-skipIndex]){
                     if (layer.nodes[index-skipIndex].title != childNode.text){
                         skipIndex++;
@@ -281,6 +282,14 @@ OpenLayers.Control.LayerTree = OpenLayers.Class(OpenLayers.Control.LayerSwitcher
 
 
     changeNodeState: function(node, inRange){
+        if (inRange) {
+            $('#checkbox_' + node.id).checkboxradio("enable");
+        }
+        else {
+            $('#checkbox_' + node.id).checkboxradio("disable");
+        }
+            
+        /*
         iconSpan = jQuery(node.target).find(".tree-checkbox");
         titleSpan = jQuery(node.target).find(".tree-title");
         if(inRange && iconSpan.hasClass("tree-check-disabled")){
@@ -291,29 +300,28 @@ OpenLayers.Control.LayerTree = OpenLayers.Class(OpenLayers.Control.LayerSwitcher
             iconSpan.addClass("tree-check-disabled");
             titleSpan.addClass("tree-title-disabled");
         }
+        */
     },
 
 
     toggleBaseLayerEnabled: function (obj, enable) {
-                var radios = document.getElementsByName(obj.id + "_radio");
-                jQuery.each(obj.baseTree.tree('getRoots'),function(index,node){
-                    titleSpan = jQuery(node.target).find(".tree-title");
-                    if (enable) {
-                        titleSpan.removeClass("tree-title-disabled");
-                    }
-                    else {
-                        titleSpan.addClass("tree-title-disabled");
-                        for (var i = 0; i< radios.length;  i++){
-                            radios[i].checked = false;
-                        }
-                        obj.baseTree.tree('collapseAll');
-                    }
-                });
-                for (var i = 0; i< radios.length;  i++){
-                    radios[i].disabled = !enable;
-                }
-                if (!enable)
-                    obj.map.setBaseLayer(obj.map.getLayersByName('EMPTY_BASE_LAYER')[0]);
+        
+        if (enable) {
+            $(this.baseLayersDiv).show();
+            $(this.baseTree).find('input[type="radio"][name="' + obj.id + "_radio" + '"]').checkboxradio( "enable" );            
+            $(this.baseTree).find("[data-role='collapsible']").collapsible( "enable" );           
+            $(this.baseTree).find('.collapsibletree-node').removeClass("ui-state-disabled");
+        }
+        else {
+            $(this.baseTree).find('input[type="radio"][name="' + obj.id + "_radio" + '"]').prop( "checked", false ).checkboxradio( "refresh" );
+            $(this.baseTree).find('input[type="radio"][name="' + obj.id + "_radio" + '"]').checkboxradio( "disable" );            
+            $(this.baseTree).find("[data-role='collapsible']").collapsible( "disable" );
+            $(this.baseTree).find("[data-role='collapsible']").collapsible( "collapse" );
+            $(this.baseTree).find('.collapsibletree-node').addClass("ui-state-disabled");
+            $(this.baseLayersDiv).hide();
+            obj.map.setBaseLayer(obj.map.getLayersByName('EMPTY_BASE_LAYER')[0]);
+        }
+            
     },
 
     createBaseTree: function(){
@@ -326,16 +334,15 @@ OpenLayers.Control.LayerTree = OpenLayers.Class(OpenLayers.Control.LayerSwitcher
         //SE HO IL TITOLO DEL BASELAYER VUOTO AGGIUNGO IL TITOLO AL NODO DELL'ALBERO E SPSOSTO IL NODO IN ROOT 
         //ALTRIMENTI ELIMINO IL NODO DALL'ALBERO (BASE VUOTA NASCOSTO)
         if(this.emptyTitle == '') {
-            
-            var chkEnableBaseLayers = document.createElement('input');
-            chkEnableBaseLayers.type = 'checkbox';
-            chkEnableBaseLayers.id = 'enableBaseLayers';
-            chkEnableBaseLayers.onchange = function () {
-                self.toggleBaseLayerEnabled(self, this.checked);
-            }
 
-            this.baseLbl.innerText = ' Usa sfondo cartografico';
-            this.baseLbl.appendChild(chkEnableBaseLayers);
+            //this.baseLbl.innerText = ' Usa sfondo cartografico';
+            //this.baseLbl.appendChild(chkEnableBaseLayers);
+            $(this.baseLbl).html('<input type="checkbox" name="checkbox_enableBaseLayers" id="checkbox_enableBaseLayers" class="custom" data-mini="true"><label for="checkbox_enableBaseLayers">Attiva sfondo cartografico</label>');
+            $("#checkbox_enableBaseLayers").checkboxradio();                     
+            $("#checkbox_enableBaseLayers").change(function(){
+                self.toggleBaseLayerEnabled(self, this.checked);
+                $("#checkbox_enableBaseLayers").checkboxradio("refresh");
+            });
             
             this.baselayerData = this.baselayerData.slice(1);
         } else {
@@ -343,11 +350,60 @@ OpenLayers.Control.LayerTree = OpenLayers.Class(OpenLayers.Control.LayerSwitcher
             this.baselayerData[0].text = this.emptyTitle;
         }
 
-        var ulbaseElem = document.createElement("ul");
-        OpenLayers.Element.addClass(ulbaseElem, "easyui-tree");
-        this.baseLayersDiv.appendChild(ulbaseElem);
+        //var ulbaseElem = document.createElement("ul");
+        //OpenLayers.Element.addClass(ulbaseElem, "easyui-tree");
+        //this.baseLayersDiv.appendChild(ulbaseElem);
         var radioName = self.id + "_radio";
+        
+        this.baseTree = jQuery(this.baseLayersDiv).collapsibletree({
+            data: self.baselayerData,
+            nodeTextTag:'h3',
+            collapsed: true,
+            formatter: function (node) {
+                if(node.children)
+                    return node.text;
+                else{
+                    var id = node.id;                    
+                    var checked = (node.attributes.layer.name == self.map.config.baseLayerName || node.attributes.layer.name == 'EMPTY_BASE_LAYER')?"checked='checked'":"";
+                    return '<input type="radio" '+ checked +' id="radio_'+ id +'" name="' + radioName + '" data-mini="true"><label for="radio_' + node.id + '">' + node.text + '</label>';
+                }
+            },
+        });
 
+        $(this.baseTree).find("[data-role='controlgroup']").controlgroup();
+        $(this.baseTree).find("[data-role='controlgroup']").controlgroup('option', 'data-mini', 'true');
+        $('.ui-controlgroup-controls').css("width", "100%");
+        $(this.baseTree).find('.collapsibletree-node').css("white-space", "normal");
+        $(this.baseTree).find('[type="radio"]').checkboxradio();
+        $(this.baseTree).find('[type="radio"]').checkboxradio("refresh");
+
+        $(this.baseTree).find('.collapsibletree-leaf').click(function(event){
+
+            var chkID = 'radio_' + event.currentTarget.id;
+            
+            if ($('#' + chkID).checkboxradio( "option", "disabled" )) {
+                return false;
+            }
+            
+            if ($('#' + chkID).prop('checked')){
+                return false;
+            }
+
+            //$('input[type="radio"][name="' + self.id + "_radio" + '"][checked').removeAttr("checked");
+            $('#' + chkID).prop( "checked", true );
+            $('input[type="radio"][name="' + self.id + "_radio" + '"]').checkboxradio( "refresh" );
+            $('input[type="radio"][name="' + self.id + "_radio" + '"]').checkboxradio( "enable" );
+            
+            self.map.setBaseLayer(self.map.getLayer(event.currentTarget.id));
+            
+            event.stopPropagation();
+        });
+        
+ 
+        if(this.emptyTitle == '')
+          this.toggleBaseLayerEnabled(self, false);
+
+/*
         this.baseTree = jQuery(ulbaseElem).tree({  
             animate:true,
             lines:true,
@@ -383,7 +439,7 @@ OpenLayers.Control.LayerTree = OpenLayers.Class(OpenLayers.Control.LayerSwitcher
         
       if(this.emptyTitle == '')
           this.toggleBaseLayerEnabled(self, false);
-
+*/
     },
 
 
@@ -402,7 +458,122 @@ OpenLayers.Control.LayerTree = OpenLayers.Class(OpenLayers.Control.LayerSwitcher
             if(thNode.children.length == 1 && thNode.children[0].text == thNode.text) this.overlayData[i] = thNode.children[0];
         };
         
+        //var divDataElem = document.createElement("div");
+        //OpenLayers.Element.addClass(uldataElem, "easyui-tree");
+        //this.dataLayersDiv.appendChild(divDataElem);       
+        
+        this.overlayTree = jQuery(this.dataLayersDiv).collapsibletree({
+            data: self.overlayData,
+            nodeTextTag:'h5',
+            collapsed: true,
+            formatter: function (node) {
+                var chkdCode = '';
+                var partialCheckCode = '';
+                if(node.checked) {
+                    chkdCode = ' checked="checked"';
+                }
+                else if (node.children){
+                    var childNum = node.children.length;
+                    var childChecked = 0;
+                    for (var j=0; j<childNum; j++) {
+                        if (node.children[j].checked) childChecked++;
+                    }
+                    
+                    if (childChecked == childNum) {
+                        chkdCode = ' checked="checked"';
+                    }
+                    else if (childChecked > 0){
+                        partialCheckCode = '" class="ui-checkbox-partial';
+                    }
+                }
+                var html = '<input type="checkbox" name="checkbox_' + node.id + '" id="checkbox_' + node.id + '" class="custom layertree-chk"' + chkdCode + ' data-mini="true"><label for="checkbox_' + node.id + partialCheckCode + '">' + node.text + '</label>';
+                return html;
+            }
+        });
+        
+        $(this.overlayTree).find('[type="checkbox"]').checkboxradio();
+        
+        jQuery('.layertree-chk').on("toggle", function(event, checked) {
+            
+            $('#' + event.target.id).prop( "checked", checked ).checkboxradio( "refresh" );
+            
+            var node = jQuery(self.overlayTree).collapsibletree("find", event.target.id.replace(/^checkbox_/, ''));
+            node.checked = checked;
+            
+            if(node.attributes && node.attributes.layer){
+                var layer = node.attributes.layer;
+                self.updateLayerVisibility(layer, checked);
+            }
 
+            if (node.children) {
+                for (var i=0; i<node.children.length; i++) {
+                    $('#checkbox_' + node.children[i].id).trigger("toggle", [ checked ]);
+                }
+            }
+            
+            if (node.parentID) {
+                var nodeParent = self.overlayTree.collapsibletree("find", node.parentID);
+                var children = self.overlayTree.collapsibletree('getChildren',nodeParent);
+                var childNum = children.length;
+                var childChecked = 0;
+                for (var j=0; j<childNum; j++) {
+                    if (children[j].checked) childChecked++;
+                }
+                if (childChecked == 0) {
+                    $('label[for="checkbox_' + node.parentID + '"]').removeClass("ui-checkbox-partial");
+                    $('#checkbox_' + node.parentID).prop( "checked", false ).checkboxradio( "refresh" );
+                }
+                else if (childChecked == childNum) {
+                    $('label[for="checkbox_' + node.parentID + '"]').removeClass("ui-checkbox-partial");
+                    $('#checkbox_' + node.parentID).prop( "checked", true ).checkboxradio( "refresh" );
+                }
+                else {
+                    $('#checkbox_' + node.parentID).prop( "checked", false ).checkboxradio( "refresh" );
+                    $('label[for="checkbox_' + node.parentID + '"]').addClass("ui-checkbox-partial");
+                }
+                    
+                    
+            }
+
+            
+            return false;
+        }),
+        
+        $(this.overlayTree).find('[type="checkbox"]').checkboxradio("refresh");
+        
+        $(this.overlayTree).find('.collapsibletree-leaf').click(function(event){
+
+            var chkID = 'checkbox_' + event.currentTarget.id;
+            
+            if ($('#' + chkID).checkboxradio( "option", "disabled" )) {
+                return false;
+            }
+            
+            var chkdValue = !$('#' + chkID).prop('checked');
+            
+            $('#' + event.currentTarget.id + ' [type="checkbox"]').trigger("toggle", [ chkdValue ]);
+            
+            event.stopPropagation();
+        });
+        
+        
+        $(this.overlayTree).find('.collapsibletree-node').click(function(event){
+            
+            var chkID = 'checkbox_' + event.currentTarget.id;
+            
+            if ($('#' + chkID).checkboxradio( "option", "disabled" )) {
+                return false;
+            }
+            
+            var chkdValue = !$('#' + chkID).prop('checked');
+                       
+            $('#' + event.currentTarget.id + ' [type="checkbox"]').trigger("toggle", [ chkdValue ]);
+            
+            event.stopPropagation();
+        });
+        
+        
+/*
         var uldataElem = document.createElement("ul");
         OpenLayers.Element.addClass(uldataElem, "easyui-tree");
         this.dataLayersDiv.appendChild(uldataElem);             
@@ -461,7 +632,7 @@ OpenLayers.Control.LayerTree = OpenLayers.Class(OpenLayers.Control.LayerSwitcher
                     else
                         return node.text;
                     */
-            },
+/*            },
 
             onLoadSuccess: function(node, data){
 
@@ -470,7 +641,7 @@ OpenLayers.Control.LayerTree = OpenLayers.Class(OpenLayers.Control.LayerSwitcher
 
         });
 
-
+*/
 
 
     },

@@ -1,8 +1,11 @@
 OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
-    type: OpenLayers.Control.TYPE_TOGGLE,
+    //type: OpenLayers.Control.TYPE_TOGGLE,
     formId: undefined, //id del form di stampa
     loadingControl: undefined,
     baseUrl:null,
+    defaultTemplateHTML: null,
+    defaultTemplatePDF: null,
+    defaultLayers: [],
     waitFor: undefined, //se il pannello viene caricato async, il tool aspetta il caricamento prima di far partire la richiesta per il box
     //passare l'url del servizio stampa per non doverlo cablare!
     
@@ -20,7 +23,7 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
         $('#'+me.formId+' span[role="icon"]').removeClass('glyphicon-white').addClass('glyphicon-disabled');
         
         $.ajax({
-            url: me.baseUrl + 'services/print.php',
+            url: me.baseUrl + '/services/print.php',
             type: 'POST',
             data: params,
             dataType: 'json',
@@ -36,6 +39,9 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
                         $('#'+me.formId+' a[role="pdf"] span[role="icon"]').removeClass('glyphicon-disabled').addClass('glyphicon-white');
                     }
                     
+                    var win = window.open(response.file, '_blank');
+                    win.focus();
+                    
                 } else alert(OpenLayers.i18n('Error'));
                 
                 if(me.loadingControl) me.loadingControl.minimizeControl();
@@ -45,6 +51,16 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
                 if(me.loadingControl) me.loadingControl.minimizeControl();
             }
         });
+    },
+
+    aaactivate: function(){
+
+        //console.log("activate");
+    },
+
+    aadeactivate: function(){
+        console.log("deactivate");
+        //this.removePrintArea();
     },
     
     setMap: function(map) {
@@ -57,9 +73,12 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
             if(query.length) me.loadingControl = query[0];
         }
 
+        $('#'+me.formId).on('click', 'a[role="html"],a[role="pdf"]', function(event) {
+            if($(this).attr("href") == "#") event.preventDefault();
+        });
+
         $('#'+me.formId).on('click', 'button[role="print"]', function(event) {
             event.preventDefault();
-            
             me.doPrint();
         });
         
@@ -78,6 +97,7 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
 
         me.events.register(waitForEvent, me, me.onToolReady);
         me.events.register('deactivate', me, me.removePrintArea);
+        me.events.register('show', me, me.drawPrintArea);
         
         me.map.events.register('moveend', me, me.boxMoved);
     },
@@ -91,7 +111,7 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
         var pixelsDistance  = size.w / distance;
         var scaleMode = $('#'+this.formId+' input[name="scale_mode"]:checked').val();
         var scale = $('#'+this.formId+' input[name="scale"]').val();
-        var currentScale = this.map.getScale();
+        var currentScale = this.map.getScale()
         if(scaleMode == 'user') {
             pixelsDistance = pixelsDistance / (scale/currentScale);
         }
@@ -103,7 +123,8 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
             var center = this.map.getCenter();
         }
         
-        
+        var pFormat = $('#'+this.formId+' input[name="format"]:checked').val();
+
         var copyrightString = null;
         var searchControl = this.map.getControlsByClass('OpenLayers.Control.Attribution');
         if(searchControl.length > 0) {
@@ -111,12 +132,12 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
         }
         
         var srid = this.map.getProjection();
-        if(srid == 'ESPG:900913') srid = 'EPSG:3857';
+        if(srid == 'EPSG:900913') srid = 'EPSG:3857';
         
         var params = {
             viewport_size: [size.w, size.h],
             center: [center.lon, center.lat],
-            format: $('#'+this.formId+' input[name="format"]:checked').val(),
+            format: pFormat,
             printFormat: $('#'+this.formId+' select[name="formato"]').val(),
             direction: $('#'+this.formId+' input[name="direction"]:checked').val(),
             scale_mode: scaleMode,
@@ -127,32 +148,52 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
             date: $('#'+this.formId+' input[name="date"]').val(),
             dpi: $('#'+this.formId+' select[name="print_resolution"]').val(),
             srid: srid,
+            map: this.map.config.mapsetName,
             pixels_distance: pixelsDistance,
             copyrightString: copyrightString
         };
+
+        if (pFormat == 'HTML' && this.defaultTemplateHTML)
+            params['template'] = this.defaultTemplateHTML;
+        else if (pFormat == 'PDF' && this.defaultTemplatePDF)
+            params['template'] = this.defaultTemplatePDF;
+        
         return params;
         
     },
+
     getParams: function() {
         var self = this;
-        
+        var gcConfig = this.map.config; 
         var params = this.getConfigParams();
         
+        //Setto i tiles
         var tiles = [];
+
+        var layers = this.map.layers;
+        var mapsetTilesActive = false;
         
-        $.each(this.map.layers, function(key, layer) {
-            if (!layer.getVisibility()) return;
+        if (GisClientMap.mapsetTiles){
+            if (GisClientMap.mapsetTileLayer.getVisibility()) {
+                mapsetTilesActive = true;
+                layers = self.defaultLayers;
+            }
+        }
+        $.each(layers, function(key, layer) {
+            if (!layer.getVisibility() && !mapsetTilesActive) return;
             //if (!layer.calculateInRange()) return;
             var tile;
+            var layerUrl = layer.url;
+            if(layer.owsurl) layerUrl = layer.owsurl;
             if(layer.CLASS_NAME == 'OpenLayers.Layer.TMS') {
                 tile = {
-                    url: layer.url.replace('/tms/', '/wms/'),
+                    url: layerUrl,//.replace('/tms/', '/wms/'),
                     parameters: {
                         service: 'WMS',
                         request: 'GetMap',
-                        project: gisclient.getProject(),
-                        map: gisclient.getMapOptions().mapsetName,
-                        layers: [layer.layername.substr(0, layer.layername.indexOf('@'))],
+                        project: gcConfig.projectName,
+                        map: gcConfig.mapsetName,
+                        layers: [layer.layername.substr(0, layer.layername.indexOf('/'))],
                         version: '1.1.1',
                         format: 'image/png'
                     },
@@ -160,8 +201,13 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
                     opacity: layer.opacity ? (layer.opacity * 100) : 100
                 };
             } else if(layer.CLASS_NAME == 'OpenLayers.Layer.WMS') {
+
+                layer.params.project = gcConfig.projectName;
+                layer.params.map  = gcConfig.mapsetName;
+                if(typeof(layer.params["LAYERS"])!='object')
+                    layer.params["LAYERS"] = layer.params["LAYERS"].split(",");
                 tile = {
-                    url: layer.url,
+                    url: layerUrl,
                     type: 'WMS',
                     parameters: layer.params,
                     opacity: layer.opacity ? (layer.opacity * 100) : 100
@@ -169,27 +215,42 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
             } else if(layer.CLASS_NAME == 'OpenLayers.Layer.WMTS') {
                 var params = {
                     LAYERS: [layer.name],
+                    PROJECT: gcConfig.projectName,
+                    MAP: gcConfig.mapsetName,
                     FORMAT: 'image/png',
                     SRS: layer.projection.projCode,
                     TRANSPARENT: true,
                     SERVICE: 'WMS',
                     VERSION: '1.1.1'
                 };
+
                 tile = {
-                    url: GisClientMap.mapProxyBaseUrl+'/'+GisClientMap.mapsetName+'/service?',
+                    //url: gcConfig.mapProxyBaseUrl+'/'+gcConfig.projectName+'/'+gcConfig.mapsetName+'/service?',
+                    url:layerUrl,
                     type: 'WMS',
                     parameters: params,
                     opacity: layer.opacity ? (layer.opacity * 100) : 100
                 };
             } else if(layer.CLASS_NAME == 'OpenLayers.Layer.OSM' ||
                 layer.CLASS_NAME == 'OpenLayers.Layer.Google') {
-
+                var params = {
+                    LAYERS: [layer.name],
+                    PROJECT: gcConfig.projectName,
+                    MAP: gcConfig.mapsetName,
+                    FORMAT: 'image/png',
+                    SRS: "EPSG:3857",
+                    TRANSPARENT: true,
+                    SERVICE: 'WMS',
+                    VERSION: '1.1.1'
+                };
                 tile = {
-                    type: 'external_provider',
+                    url:layerUrl,
+                    type: 'WMS',
                     externalProvider: layer.CLASS_NAME.replace('OpenLayers.Layer.', ''),
+                    parameters: params,
                     name: layer.name,
-                    project: GisClientMap.projectName,
-                    map: GisClientMap.mapsetName
+                    project: gcConfig.projectName,
+                    map: gcConfig.mapsetName,
                 };
             } else console.log(layer.name+' '+layer.CLASS_NAME+' non riconosciuto per stampa');
             if(tile) {
@@ -247,7 +308,7 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
         params.request_type = 'get-box';
         
         $.ajax({
-            url: me.baseUrl + 'services/print.php',
+            url: me.baseUrl + '/services/print.php',
             type: 'POST',
             dataType: 'json',
             data: params,
@@ -300,7 +361,7 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
         this.printBox = [lb.lon, lb.lat, rt.lon, rt.lat];
     },
     
-    removePrintarea: function() {
+    removePrintArea: function() {
         $('#print_box').hide();
     }
 });
