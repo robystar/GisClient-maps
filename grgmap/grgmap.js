@@ -87,6 +87,8 @@ $(function() {
             if (x && y){
               $('input[name="coordx"]').val(Math.round(x));
               $('input[name="coordy"]').val(Math.round(y));
+              $('input[name="x_civico"]').val(Math.round(x));
+              $('input[name="y_civico"]').val(Math.round(y));
             }
           }
         }
@@ -122,6 +124,8 @@ $(function() {
         if(!(e.added && e.added.x && e.added.y)) return;
         $('input[name="coordx"]').val(Math.round(e.added.x));
         $('input[name="coordy"]').val(Math.round(e.added.y));
+        $('input[name="x_civico"]').val(Math.round(e.added.x));
+        $('input[name="y_civico"]').val(Math.round(e.added.y));
     });
 
 
@@ -205,6 +209,7 @@ var initMap = function(){
 
 
     var updateCoords = true;
+    console.log(OpenLayers.Control.PrintMap);
     var btnPrint = new OpenLayers.Control.PrintMap({
             tbarpos:"first", 
             //type: OpenLayers.Control.TYPE_TOGGLE, 
@@ -216,7 +221,7 @@ var initMap = function(){
             editMode: editMode,
             styleBox: styleBox,
             
-            serviceUrl:'/gisclient/services/print.php',
+            serviceUrl:'http://testgrg.gisclient.net/gisclient/services/print.php',
             eventListeners: {
                 updatebox: function(e){
 
@@ -266,7 +271,7 @@ var initMap = function(){
         btnPrint.updatePrintBox();
       },
       spin: function( event, ui ) {
-        btnPrint.printBoxScale = $(this).val();
+        btnPrint.printBoxScale = ui.value;
         btnPrint.updatePrintBox();
       }
     });
@@ -283,8 +288,8 @@ var initMap = function(){
 
         }
         else{
-          var x = Math.round(parseFloat($('input[name="coordx"]').attr('value')));
-          var y = Math.round(parseFloat($('input[name="coordy"]').attr('value')));
+          var x = Math.round(parseFloat($('input[name="x_civico"]').attr('value')));
+          var y = Math.round(parseFloat($('input[name="y_civico"]').attr('value')));
           if(x && y) {
             var position = new OpenLayers.LonLat(x,y).transform("EPSG:3003","EPSG:3857");
             btnPrint.movePrintBox(new OpenLayers.LonLat(x,y).transform("EPSG:3003","EPSG:3857"));
@@ -344,11 +349,11 @@ var initMap = function(){
 
     initDialog();
 
-    OpenLayers.ImgPath = "/gisclient/maps/resources/themes/openlayers/img/";
-    var GisClientBaseUrl = "/gisclient/"
+    OpenLayers.ImgPath = "http://testgrg.gisclient.net/gisclient/maps/resources/themes/openlayers/img/";
+    var GisClientBaseUrl = "http://testgrg.gisclient.net/gisclient/"
 
     $.ajax({
-      url: '/gisclient/services/gcmap.php',
+      url: 'http://testgrg.gisclient.net/gisclient/services/gcmap.php',
       dataType: "jsonp",
       data:{"mapset":"mappagrg"},
       jsonpCallback: "jsoncallback",

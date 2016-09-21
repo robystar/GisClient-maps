@@ -263,6 +263,7 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
 
         var bounds = e.feature.geometry.getBounds();
         this.printBoxScale = Math.abs(bounds.right-bounds.left)/pageW*100;
+                console.log(this.printBoxScale)
 
         if(this.printBoxScale > this.maxScale) {
             this.printBoxScale = this.maxScale;
@@ -385,6 +386,7 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
 
     movePrintBox: function(position){
         //if(!this.editMode) return;
+        console.log(this.printBox)
         if(this.modifyControl && this.modifyControl.feature) this.modifyControl.unselectFeature(this.printBox);
         this.printBox.move(position);
 
