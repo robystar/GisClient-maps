@@ -1401,7 +1401,16 @@ var initMap = function(){
         window.location.href = newUrl;
     });
 
-        
+
+    var ret = map.getLayersByName("gmap-satellite");
+    if(ret.length > 0){
+        ret[0].mapObject.setTilt(0);
+    }
+
+
+
+
+
 }//END initMap
 
 
