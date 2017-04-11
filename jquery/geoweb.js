@@ -5,10 +5,18 @@ function adjustPanZoomBar(olControl, toolOffset){
     var cZoom = $('.olControlPanZoomBar').offset();
     if (toolOffset)
     {
-        if (olControl.active)
+        if (olControl.active) {
+            if (olControl.div)
+                if (olControl.div.id == "map-toolbar-redline")
+                    $('#map-toolbars').css('top', '50px');
             $('.olControlPanZoomBar').offset({top: cZoom.top + toolOffset, left: cZoom.left } );
-        else
+        }
+        else {
             $('.olControlPanZoomBar').offset({top: cZoom.top - toolOffset, left: cZoom.left } );
+            if (olControl.div)
+                if (olControl.div.id == "map-toolbar-redline")
+                    $('#map-toolbars').css('top', '2px');
+        }
     }
 }
 
@@ -458,6 +466,8 @@ var initMap = function(){
                         me.exportReport(reportID, action, event.filter);
                     });
                     
+                    self.evt = event;
+                    
                     $("#DetailsWindow").scroll(function() {
                         var me = self;
                         if (me.totalRows <= me.currentPage*me.rowsPerPage)
@@ -468,7 +478,7 @@ var initMap = function(){
                             var elemTop = rowMarker[0].offsetTop;
                             if (elemTop <= docViewTop && me.dataLoading == false){
                                 me.currentPage += 1;
-                                me.getReportData(event.reportID, self.currentPage, event.filter);
+                                me.getReportData(self.evt.reportID, self.currentPage, self.evt.filter);
                             }
                         }
                     });
@@ -833,6 +843,8 @@ var initMap = function(){
                     control.layers = oldLayers;
                     control.queryFeatureType = oldQueryFeatureType;
                     control.onlyVisiblelayers = oldOnlyVisibleLayers;
+                    if (queryToolbar.resultLayer)
+                        queryToolbar.resultLayer.setVisibility(true);
                 }
                 //control.highLight = oldHighlight;
 
@@ -920,14 +932,20 @@ var initMap = function(){
     //measureToolbar.activate();
 
 
-    var redlineToolbar = new OpenLayers.Control.Panel({
+    var redlineToolbar = new OpenLayers.GisClient.geoNoteToolbar({
         createControlMarkup:customCreateControlMarkup,
         div:document.getElementById("map-toolbar-redline"),
         autoActivate:false,
         saveState:true,
+        divdrawbtns: "map-toolbar-redline-draw",
+        divopsgbtns: "map-toolbar-redline-opsg",
+        divopsnbtns: "map-toolbar-redline-opsn"
     })
+    
+    /*
     var redlineLayer = new OpenLayers.Layer.Vector('Redline');
     map.addLayer(redlineLayer);
+    
     var controls = [
             new OpenLayers.Control.DrawFeature(
                 redlineLayer, 
@@ -953,6 +971,7 @@ var initMap = function(){
             ),
         ]
     redlineToolbar.addControls(controls)
+ */
     map.addControl(redlineToolbar);
     //redlineToolbar.activate();
 
@@ -1062,14 +1081,15 @@ var initMap = function(){
                     if (this.active) {
                         this.deactivate();
                         queryToolbar.deactivate();
-                        adjustPanZoomBar(queryToolbar, 60);
+                        //adjustPanZoomBar(queryToolbar, 60);
                     }
                     else
                     {
                         this.activate();
                         queryToolbar.activate();
-                        queryToolbar.controls[0].activate();
-                        adjustPanZoomBar(queryToolbar, 60);
+                        if (this.map.currentControl != queryToolbar.controls[0])
+                            queryToolbar.controls[0].activate();
+                        //adjustPanZoomBar(queryToolbar, 60);
                         
                     }
                     sidebarPanel.handleEvent = false;
@@ -1129,14 +1149,14 @@ var initMap = function(){
                     if (this.active) {
                         this.deactivate();
                         reportToolbar.deactivate();
-                        adjustPanZoomBar(reportToolbar, 60);
+                        //adjustPanZoomBar(reportToolbar, 60);
                     }
                     else
                     {
                         this.activate();
                         reportToolbar.activate();
                         //queryToolbar.controls[0].activate();
-                        adjustPanZoomBar(reportToolbar, 60);
+                        //adjustPanZoomBar(reportToolbar, 60);
                         
                     }
                     sidebarPanel.handleEvent = false;
@@ -1151,13 +1171,13 @@ var initMap = function(){
                     if (this.active) {
                         this.deactivate();
                         measureToolbar.deactivate();
-                        adjustPanZoomBar(measureToolbar, 27);
+                        //adjustPanZoomBar(measureToolbar, 27);
                     }
                     else
                     {
                         this.activate();
                         measureToolbar.activate();
-                        adjustPanZoomBar(measureToolbar, 27);
+                        //adjustPanZoomBar(measureToolbar, 27);
                     }
                     sidebarPanel.handleEvent = false;
                 }
@@ -1179,15 +1199,19 @@ var initMap = function(){
                 if (sidebarPanel.handleEvent)
                 {
                     if (this.active) {
+                        
                         this.deactivate();
                         redlineToolbar.deactivate();
-                        adjustPanZoomBar(redlineToolbar, 27);
+                        $('#map-toolbars').css('top', '2px');
+                        //adjustPanZoomBar(redlineToolbar, 44);
                     }
                     else
                     {
                         this.activate();
                         redlineToolbar.activate();
-                        adjustPanZoomBar(redlineToolbar, 27);
+                        var nShift = $('#map-toolbars-edit').heigth() + 3;
+                        $('#map-toolbars').css('top', nShift + 'px');
+                        //adjustPanZoomBar(redlineToolbar, 44);
                     }
                     sidebarPanel.handleEvent = false;
                 }
@@ -1206,6 +1230,8 @@ var initMap = function(){
             iconclass:"glyphicon-white glyphicon-print", 
             title:"Pannello di stampa",
             waitFor: 'panelready',
+            allowDrag: true,
+            printLegend: 'yes',
             defaultTemplateHTML: PRINT_TEMPLATE_HTML,
             defaultTemplatePDF: PRINT_TEMPLATE_PDF,
             trigger: function() {
@@ -1226,14 +1252,162 @@ var initMap = function(){
                             });
                         }
                         else {
-                            this.drawPrintArea();
+                            //this.drawPrintArea();
                         }
                             
                         sidebarPanel.show('printpanel');
                     }
                     sidebarPanel.handleEvent = false;
                 }
-            }      
+            },
+            eventListeners: {
+                'panelready': function(event) {
+                    var me = this, timerid,
+                    scale = Math.round(me.map.getScale()),
+                    userScale = $('#'+me.formId+' input[name="scale"]').val();
+
+                    if(!userScale) {
+                        me.boxScale?$('#'+me.formId+' input[name="scale"]').val(me.boxScale):$('#'+me.formId+' input[name="scale"]').val(scale);
+                        $('#'+me.formId+' input[name="scale"]').prop('disabled', true);
+                    }
+
+                    if (me.pages) {
+                        var pagesList;
+                        $('#'+me.formId+' select[name="formato"]').children().remove().end();
+                        $('#'+me.formId+' input[name="direction"]:checked').val() == 'vertical'?pagesList=me.pages.vertical:pagesList=me.pages.horizontal;
+                        $.each(pagesList, function (page, dims) {
+                            if (page == me.pageFormat) {
+                                $('#'+me.formId+' select[name="formato"]').append('<option selected value="' + page + '">' + page + '</option>');
+                            }
+                            else {
+                                $('#'+me.formId+' select[name="formato"]').append('<option value="' + page + '">' + page + '</option>');
+                            }
+                        });
+                    }
+                    
+                    $('#'+me.formId+' input[name="scale_mode"]').change(function() {
+                        if (this.value == 'user') {
+                            $('#'+me.formId+' input[name="scale"]').prop('disabled', false);
+                            var userScale = $('#'+me.formId+' input[name="scale"]').val();
+                            var currentScale = me.boxScale?me.boxScale:me.map.getScale();
+                            if (userScale > currentScale) {
+                                userScale = Math.round(currentScale);
+                                $('#'+me.formId+' input[name="scale"]').val(userScale);
+                            }
+                            me.boxScale = userScale;
+                            me.updatePrintBox();
+                        }
+                        else {
+                            $('#'+me.formId+' input[name="scale"]').prop('disabled', true);
+                            me.removePrintBox();
+                            me.boxScale = null;
+                            me.drawPrintBox.apply(me);
+                        }
+                    });
+                    $('#'+me.formId+' input[name="scale"]').on('input', function() {
+                        var value = $(this).val();
+                        if($(this).data("lastval")!= value){
+
+                            $(this).data("lastval",value);        
+                            clearTimeout(timerid);
+
+                            timerid = setTimeout(function() {
+                                if ($('#'+me.formId+' input[name="scale_mode"]:checked').val() == 'user') {
+                                    me.boxScale = value;
+                                    me.updatePrintBox();
+                                }
+                            },500);
+                        };
+                    });
+                    
+                    $('#'+me.formId+' input[name="direction"]').change(function() {
+                        if (me.pages) {
+                            var pagesList;
+                            $('#'+me.formId+' select[name="formato"]').children().remove().end();
+                            $('#'+me.formId+' input[name="direction"]:checked').val() == 'vertical'?pagesList=me.pages.vertical:pagesList=me.pages.horizontal;
+                            $.each(pagesList, function (page, dims) {
+                                if (page == me.pageFormat) {
+                                    $('#'+me.formId+' select[name="formato"]').append('<option selected value="' + page + '">' + page + '</option>');
+                                }
+                                else {
+                                    $('#'+me.formId+' select[name="formato"]').append('<option value="' + page + '">' + page + '</option>');
+                                }
+                            });
+                        }
+                        me.pageLayout= $('#'+me.formId+' input[name="direction"]:checked').val();
+                        if ( $('#'+me.formId+' input[name="scale_mode"]:checked').val() == 'user') {
+                            me.updatePrintBox();
+                        }
+                        else {
+                            me.removePrintBox();
+                            me.boxScale = null;
+                            me.drawPrintBox.apply(me);
+                        }
+                    });
+                    $('#'+me.formId+' select[name="formato"]').change(function() {
+                        me.pageFormat = $('#'+me.formId+' select[name="formato"]').val();
+                        me.updatePrintBox();
+                    });
+                    
+                    $('#'+me.formId+' select[name="print_resolution"]').change(function() {
+                        me.printResolution = this.value;
+                    });
+                    
+                    $('#'+me.formId+' textarea[name="text"]').change(function() {
+                        me.printText = this.value;
+                    });
+                    
+                    $('#'+me.formId+' input[name="date"]').change(function() {
+                        me.printDate = this.value;
+                    });
+                    
+                    $('#'+me.formId+' input[name="legend"]').change(function() {
+                        this.value=='yes'?me.printLegend = this.value:me.printLegend=null;
+                    });
+
+                    $('#'+me.formId+' input[name="format"]').change(function() {
+                        me.printFormat = this.value;
+                    });
+
+                    $('#'+me.formId).on('click', 'a[role="html"],a[role="pdf"]', function(event) {
+                        if($(this).attr("href") == "#") event.preventDefault();
+                    });
+
+                    $('#'+me.formId).on('click', 'button[role="print"]', function(event) {
+                        event.preventDefault();
+                        $('#'+me.formId+' a[role="pdf"], #printpanel a[role="html"]').attr('href', '#');
+                        $('#'+me.formId+' span[role="icon"]').removeClass('glyphicon-white').addClass('glyphicon-disabled');
+                        me.doPrint();
+                    });
+
+                },
+                'deactivate' : function(event) {
+                    sidebarPanel.hide('printpanel');
+                    this.removePrintBox();
+                },
+                'activate' : function(event) {
+                    var me = this;
+                    if (me.map.currentControl!=me) {
+                        me.map.currentControl.deactivate();
+                        me.map.currentControl=me;
+                    }
+                    $('#'+me.formId+' input[name="scale_mode"]:checked').val() == 'user' ? me.boxScale = $('#'+me.formId+' input[name="scale"]').val() : me.boxScale = null;
+                    me.drawPrintBox.apply(me);
+                },
+                'printed' : function (event) {
+                    var me = this;
+                    if(event.format == 'HTML') {
+                        $('#'+me.formId+' a[role="html"]').attr('href', event.file);
+                        $('#'+me.formId+' a[role="html"] span[role="icon"]').removeClass('glyphicon-disabled').addClass('glyphicon-white');
+                    } else if(event.format == 'PDF') {
+                        $('#'+me.formId+' a[role="pdf"]').attr('href', event.file);
+                        $('#'+me.formId+' a[role="pdf"] span[role="icon"]').removeClass('glyphicon-disabled').addClass('glyphicon-white');
+                    }
+                    
+                    var win = window.open(event.file, '_blank');
+                    win.focus();
+                }
+            }
         }),
         
         new OpenLayers.Control.Button({ 

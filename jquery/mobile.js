@@ -15,14 +15,15 @@ function adjustPanZoomBar(olControl, toolOffset){
 var sidebarPanel = {
     closeTimeout: null,
     isOpened: false,
-    // **** Avoid ghost chicks from JQuery/Openlayers conflicts in mobile browsers
-    handleEvent: false,
+    width: 45,
     
     init: function(selector) {
         var self = this;
         
         self.selector = selector;
         self.$element = $(selector);
+        
+        self.width = $("#map-overlay-panel").css('width');
         
         $('.panel-close', self.$element).click(function(){
             GisClientMap.map.getControlsBy('id', 'button-layertree')[0].deactivate();
@@ -37,12 +38,11 @@ var sidebarPanel = {
         });  
 
         $('.panel-clearresults').hide();
-        
-        // **** Avoid ghost chicks from JQuery/Openlayers conflicts in mobile browsers
-        $("#map-sidebar").unbind('mouseup').mouseup(function(e){
-            self.handleEvent = true;
-            return false;
-        });
+
+    },
+    
+    getCSSWidth: function () {       
+        this.width = window.getComputedStyle(document.getElementById("map-overlay-panel")).getPropertyValue('width');
     },
     
     show: function(panelId) {
@@ -76,18 +76,18 @@ var sidebarPanel = {
         
         var el = $("#map-overlay-panel");
         //var w = width || 300;
-        var w = 300;
+        var w = parseInt(this.width,10);
+        var wd = w + 255;
+        var wr = w - 20;
         //var ell = document.getElementById("map-overlay-panel");
         //ell.style.width = "300px";
 
-        //el.css({width:w+"px"});
-        el.animate({width:w+"px"});
+        el.css({width:wd+"px"});
+        //el.animate({width:w+"px"}, 10);
         el.addClass("panel-open");
-        if(w == 300) {
-            $("#resultpanel").addClass("smalltable");
-        }
+        $("#resultpanel").addClass("smalltable");
         $('div.panel-header', this.$element).show();
-        $('#map-overlay-panel').css('right', '25px');
+        $('#map-overlay-panel').css('right', wr+'px');
         
         this.isOpened = true;
     },
@@ -95,12 +95,12 @@ var sidebarPanel = {
     close: function() {
         var el = $("#map-overlay-panel");
         //var w = width || 45;
-        var w = 45;
+        //var w = 45;
         //var ell = document.getElementById("map-overlay-panel");
         //ell.style.width = "45px";
 
-        //el.css({width:w+"px"});
-        el.animate({width:w+"px"});
+        el.css({width:this.width});
+        //el.animate({width:w+"px"}, 10);
         el.removeClass("panel-open");
         $("#resultpanel").addClass("smalltable");
         $('div.panel-header', this.$element).hide();
@@ -111,12 +111,13 @@ var sidebarPanel = {
     
     expand: function() {
         var el = $('#map-overlay-panel');
-        var width = ($(document).width() / 3) * 2;
-        el.animate({width: width + 'px'}, {
-            complete: function() {
+        var w = ($(document).width() / 3) * 2;
+        el.css({width:w+"px"});
+        //el.animate({width: width + 'px'},  10, 'linear', {
+        //    complete: function() {
                 $('#resultpanel').find('.featureTypeData').first().slideDown(200);
-            }
-        });
+        //    }
+        //});
         $('#resultpanel').removeClass('smalltable');
         
         $('.panel-expand', this.$element).hide();
@@ -125,7 +126,9 @@ var sidebarPanel = {
         
     collapse: function() {
         var el = $('#map-overlay-panel');
-        el.animate({width: '300px'});
+        //el.animate({width: '300px'}, 10);
+        var w = 300;
+        el.css({width:w+"px"});
         $('#resultpanel').addClass('smalltable');
         
         $('.panel-expand', this.$element).show();
@@ -150,6 +153,40 @@ var customCreateControlMarkup = function(control) {
         textSpan.innerHTML = control.text;
     }
     button.appendChild(textSpan);
+    
+    // **** Manually trigger sidebar buttons to avoid erratic/device dependent browser touch handling problems
+    button.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.target) {
+            e.preventDefault();
+            e.stopPropagation();
+            var objCtrl;
+            if (e.target.tagName == 'SPAN' ) {
+                objCtrl = e.target.parentElement;
+            }
+            else if (e.target.tagName == 'A' ) {
+                objCtrl = e.target;
+            }
+            else {
+                return true;
+            }
+
+            var targetCTRL = GisClientMap.map.getControlsBy('panel_div', objCtrl);
+            if (targetCTRL.length > 0) {
+                if (typeof targetCTRL[0].trigger == 'function') {
+                    targetCTRL[0].trigger();
+                }
+                else {
+                    if (targetCTRL[0].active)
+                        targetCTRL[0].deactivate();
+                    else
+                        targetCTRL[0].activate();
+                }                        
+            }
+        }
+        return false;});
+    
     return button;
 };
 
@@ -158,6 +195,9 @@ var initMap = function(){
     var map=this.map;
     map.Z_INDEX_BASE['Popup'] = 1500;
     map.Z_INDEX_BASE['Control'] = 1550;
+    
+    OpenLayers.Handler.Feature.prototype.clickTolerance = 20;
+    
     var self = this;
 
     document.title = this.mapsetTitle;
@@ -178,7 +218,6 @@ var initMap = function(){
 
     sidebarPanel.init('#sidebar-panel');
 
-    
     //SE HO SETTATO LA NAVIGAZIONE VELOCE????
     if(this.mapsetTiles){
         for(i=0;i<map.layers.length;i++){
@@ -451,6 +490,8 @@ var initMap = function(){
                         me.exportReport(reportID, action, event.filter);
                     });
                     
+                    self.evt = event;
+                    
                     $("#DetailsWindow").scroll(function() {
                         var me = self;
                         if (me.totalRows <= me.currentPage*me.rowsPerPage)
@@ -461,7 +502,7 @@ var initMap = function(){
                             var elemTop = rowMarker[0].offsetTop;
                             if (elemTop <= docViewTop && me.dataLoading == false){
                                 me.currentPage += 1;
-                                    me.getReportData(event.reportID, self.currentPage, event.filter);
+                                    me.getReportData(self.evt.reportID, self.currentPage, self.evt.filter);
                             }
                         }
                     });
@@ -840,7 +881,6 @@ var initMap = function(){
     });
     queryToolbar.defaultControl = queryToolbar.controls[0];
     map.addControl(queryToolbar);
-
     
     $('.panel-clearresults').click(function(event) {
         event.preventDefault();
@@ -852,9 +892,7 @@ var initMap = function(){
         //sidebarPanel.close();
     });
 
-
-
-
+    
     //RICERCA E INTERROGAZIONE VELOCE DA COMBO IN BASSO
     //popolo la select nel footer per le ricerche veloci
     var options = [];
@@ -912,40 +950,16 @@ var initMap = function(){
     map.addControl(measureToolbar);
     //measureToolbar.activate();
 
-
-    var redlineToolbar = new OpenLayers.Control.Panel({
+    var redlineToolbar = new OpenLayers.GisClient.geoNoteToolbar({
         createControlMarkup:customCreateControlMarkup,
         div:document.getElementById("map-toolbar-redline"),
         autoActivate:false,
         saveState:true,
+        divdrawbtns: "map-toolbar-redline-draw",
+        divopsgbtns: "map-toolbar-redline-opsg",
+        divopsnbtns: "map-toolbar-redline-opsn"
     })
-    var redlineLayer = new OpenLayers.Layer.Vector('Redline');
-    map.addLayer(redlineLayer);
-    var controls = [
-            new OpenLayers.Control.DrawFeature(
-                redlineLayer, 
-                OpenLayers.Handler.Path,
-                {
-                    handlerOptions:{freehand:true},
-                    iconclass:"glyphicon-white glyphicon-pencil", 
-                    text:"Testo penna", 
-                    title:"Testo penna",
-                    eventListeners: {'activate': function(){map.currentControl.deactivate();map.currentControl=this}}
-                }
-            ),
-            new OpenLayers.Control.DrawFeature(
-                redlineLayer, 
-                OpenLayers.Handler.Path,
-                {
-                    handlerOptions:{freehand:false},
-                    iconclass:"glyphicon-white glyphicon-tag", 
-                    text:"Testo etichetta", 
-                    title:"Testo etichetta",
-                    eventListeners: {'activate': function(){map.currentControl.deactivate();map.currentControl=this}}
-                }
-            ),
-        ]
-    redlineToolbar.addControls(controls)
+
     map.addControl(redlineToolbar);
     //redlineToolbar.activate();
 
@@ -967,19 +981,15 @@ var initMap = function(){
                 tbarpos:"last", 
                 title:"Ricerca valvole",
                 trigger: function() {
-                    if (sidebarPanel.handleEvent)
+                    if (this.active) {
+                        this.deactivate();
+                    }
+                    else
                     {
-                        if (this.active) {
-                            this.deactivate();
-                        }
-                        else
-                        {
-                            sidebarPanel.close();
-                            map.currentControl.deactivate();
-                            map.currentControl=this;
-                            this.activate();
-                        }
-                        sidebarPanel.handleEvent = false;
+                        sidebarPanel.close();
+                        map.currentControl.deactivate();
+                        map.currentControl=this;
+                        this.activate();
                     }
                 }
             }
@@ -1065,22 +1075,16 @@ var initMap = function(){
             title:"Pannello di ricerca",
             tbarpos:"first",
             trigger: function() {
-                if (sidebarPanel.handleEvent)
+                if (this.active) {
+                    this.deactivate();
+                    queryToolbar.deactivate();
+                }
+                else
                 {
-                    if (this.active) {
-                        this.deactivate();
-                        queryToolbar.deactivate();
-                        //adjustPanZoomBar(queryToolbar, 60);
-                    }
-                    else
-                    {
-                        this.activate();
-                        queryToolbar.activate();
+                    this.activate();
+                    queryToolbar.activate();
+                    if (this.map.currentControl != queryToolbar.controls[0])
                         queryToolbar.controls[0].activate();
-                        //adjustPanZoomBar(queryToolbar, 60);
-                        
-                    }
-                    sidebarPanel.handleEvent = false;
                 }
             }  
         }),
@@ -1090,18 +1094,14 @@ var initMap = function(){
             iconclass:"icon-layers", 
             title:"Pannello dei livelli",
             trigger: function() {
-                if (sidebarPanel.handleEvent)
+                if (this.active) {
+                    this.deactivate();
+                    sidebarPanel.hide('layertree');
+                }
+                else
                 {
-                    if (this.active) {
-                        this.deactivate();
-                        sidebarPanel.hide('layertree');
-                    }
-                    else
-                    {
-                        this.activate();
-                        sidebarPanel.show('layertree');
-                    }
-                    sidebarPanel.handleEvent = false;
+                    this.activate();
+                    sidebarPanel.show('layertree');
                 }
             }  
         }),
@@ -1111,18 +1111,14 @@ var initMap = function(){
             iconclass:"glyphicon-white glyphicon-list-alt", 
             title:"Tabella dei risultati",
             trigger: function() {
-                if (sidebarPanel.handleEvent)
+                if (this.active) {
+                    this.deactivate();
+                    sidebarPanel.hide('resultpanel');
+                }
+                else
                 {
-                    if (this.active) {
-                        this.deactivate();
-                        sidebarPanel.hide('resultpanel');
-                    }
-                    else
-                    {
-                        this.activate();
-                        sidebarPanel.show('resultpanel');
-                    }
-                    sidebarPanel.handleEvent = false;
+                    this.activate();
+                    sidebarPanel.show('resultpanel');
                 }
             }  
         }),
@@ -1132,42 +1128,34 @@ var initMap = function(){
             title:"Pannello di visualizzazione reports",
             tbarpos:"last",
             trigger: function() {
-                if (sidebarPanel.handleEvent)
+                if (this.active) {
+                    this.deactivate();
+                    reportToolbar.deactivate();
+                    //adjustPanZoomBar(reportToolbar, 60);
+                }
+                else
                 {
-                    if (this.active) {
-                        this.deactivate();
-                        reportToolbar.deactivate();
-                        //adjustPanZoomBar(reportToolbar, 60);
-                    }
-                    else
-                    {
-                        this.activate();
-                        reportToolbar.activate();
-                        //queryToolbar.controls[0].activate();
-                        //adjustPanZoomBar(reportToolbar, 60);
-                        
-                    }
-                    sidebarPanel.handleEvent = false;
+                    this.activate();
+                    reportToolbar.activate();
+                    //queryToolbar.controls[0].activate();
+                    //adjustPanZoomBar(reportToolbar, 60);
+
                 }
             }  
         }),
 
         new OpenLayers.Control.Button({tbarpos:"first",iconclass:"glyphicon-white glyphicon-resize-small", title:"Misure",
             trigger: function() {
-                if (sidebarPanel.handleEvent)
+                if (this.active) {
+                    this.deactivate();
+                    measureToolbar.deactivate();
+                    //adjustPanZoomBar(measureToolbar, 27);
+                }
+                else
                 {
-                    if (this.active) {
-                        this.deactivate();
-                        measureToolbar.deactivate();
-                        //adjustPanZoomBar(measureToolbar, 27);
-                    }
-                    else
-                    {
-                        this.activate();
-                        measureToolbar.activate();
-                        //adjustPanZoomBar(measureToolbar, 27);
-                    }
-                    sidebarPanel.handleEvent = false;
+                    this.activate();
+                    measureToolbar.activate();
+                    //adjustPanZoomBar(measureToolbar, 27);
                 }
             }  
         }),
@@ -1184,20 +1172,20 @@ var initMap = function(){
    */     
         new OpenLayers.Control.Button({iconclass:"glyphicon-white glyphicon-pencil", title:"Redline",
             trigger: function() {
-                if (sidebarPanel.handleEvent)
+                if (this.active) {
+
+                    this.deactivate();
+                    redlineToolbar.deactivate();
+                    $('#map-toolbars').css('top', '2px');
+                    //adjustPanZoomBar(redlineToolbar, 44);
+                }
+                else
                 {
-                    if (this.active) {
-                        this.deactivate();
-                        redlineToolbar.deactivate();
-                        //adjustPanZoomBar(redlineToolbar, 27);
-                    }
-                    else
-                    {
-                        this.activate();
-                        redlineToolbar.activate();
-                        //adjustPanZoomBar(redlineToolbar, 27);
-                    }
-                    sidebarPanel.handleEvent = false;
+                    this.activate();
+                    redlineToolbar.activate();
+                    var nShift = $('#map-toolbars-edit')[0].getBoundingClientRect().height + 3;
+                    $('#map-toolbars').css('top', nShift + 'px');
+                    //adjustPanZoomBar(redlineToolbar, 44);
                 }
             }      
         }),
@@ -1214,34 +1202,187 @@ var initMap = function(){
             iconclass:"glyphicon-white glyphicon-print", 
             title:"Pannello di stampa",
             waitFor: 'panelready',
+            allowDrag: true,
+            printLegend: 'yes',
             defaultTemplateHTML: PRINT_TEMPLATE_HTML,
             defaultTemplatePDF: PRINT_TEMPLATE_PDF,
             trigger: function() {
-                if (sidebarPanel.handleEvent)
+                if (this.active) {
+                    this.deactivate();
+                    sidebarPanel.hide('printpanel');
+                }
+                else
                 {
-                    if (this.active) {
-                        this.deactivate();
-                        sidebarPanel.hide('printpanel');
+                    this.activate();
+                    var me = this;
+
+                    if($.trim($('#printpanel').html()) == '') {
+                        $("#printpanel").load('print_panel_mobile.html', function() {
+                            me.events.triggerEvent('panelready');
+                        });
                     }
-                    else
-                    {
-                        this.activate();
-                        var me = this;
+                    else {
+                        //this.drawPrintArea();
+                    }
+
+                    sidebarPanel.show('printpanel');
+                }
+            },
+            eventListeners: {
+                'panelready': function(event) {
+                    var me = this, timerid,
+                    scale = Math.round(me.map.getScale()),
+                    userScale = $('#'+me.formId+' input[name="scale"]').val();
+
+                    $('#print_panel_legend').controlgroup();
+                    $('#print_panel_layout').controlgroup();
+                    $('#print_panel_format').controlgroup();
+                    $('#print_panel_scalemode').controlgroup();
                     
-                        if($.trim($('#printpanel').html()) == '') {
-                            $("#printpanel").load('print_panel.html', function() {
-                                me.events.triggerEvent('panelready');
-                            });
+                    $('#'+me.formId+' input[name="scale"]').textinput();
+                    
+                    if(!userScale) {
+                        me.boxScale?$('#'+me.formId+' input[name="scale"]').val(me.boxScale):$('#'+me.formId+' input[name="scale"]').val(scale);
+                        $('#'+me.formId+' input[name="scale"]').prop('disabled', true);
+                    }
+
+                    if (me.pages) {
+                        var pagesList;
+                        $('#'+me.formId+' select[name="formato"]').children().remove().end();
+                        $('#'+me.formId+' input[name="direction"]:checked').val() == 'vertical'?pagesList=me.pages.vertical:pagesList=me.pages.horizontal;
+                        $.each(pagesList, function (page, dims) {
+                            if (page == me.pageFormat) {
+                                $('#'+me.formId+' select[name="formato"]').append('<option selected value="' + page + '">' + page + '</option>');
+                            }
+                            else {
+                                $('#'+me.formId+' select[name="formato"]').append('<option value="' + page + '">' + page + '</option>');
+                            }
+                        });
+                    }
+                    
+                    $('#'+me.formId+' input[name="scale_mode"]').change(function() {
+                        if (this.value == 'user') {
+                            $('#'+me.formId+' input[name="scale"]').prop('disabled', false);
+                            var userScale = $('#'+me.formId+' input[name="scale"]').val();
+                            var currentScale = me.boxScale?me.boxScale:me.map.getScale();
+                            if (userScale > currentScale) {
+                                userScale = Math.round(currentScale);
+                                $('#'+me.formId+' input[name="scale"]').val(userScale);
+                            }
+                            me.boxScale = userScale;
+                            me.updatePrintBox();
                         }
                         else {
-                            this.drawPrintArea();
+                            $('#'+me.formId+' input[name="scale"]').prop('disabled', true);
+                            me.removePrintBox();
+                            me.boxScale = null;
+                            me.drawPrintBox.apply(me);
                         }
-                            
-                        sidebarPanel.show('printpanel');
+                    });
+                    $('#'+me.formId+' input[name="scale"]').on('input', function() {
+                        var value = $(this).val();
+                        if($(this).data("lastval")!= value){
+
+                            $(this).data("lastval",value);        
+                            clearTimeout(timerid);
+
+                            timerid = setTimeout(function() {
+                                if ($('#'+me.formId+' input[name="scale_mode"]:checked').val() == 'user') {
+                                    me.boxScale = value;
+                                    me.updatePrintBox();
+                                }
+                            },500);
+                        };
+                    });
+                    
+                    $('#'+me.formId+' input[name="direction"]').change(function() {
+                        if (me.pages) {
+                            var pagesList;
+                            $('#'+me.formId+' select[name="formato"]').children().remove().end();
+                            $('#'+me.formId+' input[name="direction"]:checked').val() == 'vertical'?pagesList=me.pages.vertical:pagesList=me.pages.horizontal;
+                            $.each(pagesList, function (page, dims) {
+                                if (page == me.pageFormat) {
+                                    $('#'+me.formId+' select[name="formato"]').append('<option selected value="' + page + '">' + page + '</option>');
+                                }
+                                else {
+                                    $('#'+me.formId+' select[name="formato"]').append('<option value="' + page + '">' + page + '</option>');
+                                }
+                            });
+                        }
+                        me.pageLayout= $('#'+me.formId+' input[name="direction"]:checked').val();
+                        if ( $('#'+me.formId+' input[name="scale_mode"]:checked').val() == 'user') {
+                            me.updatePrintBox();
+                        }
+                        else {
+                            me.removePrintBox();
+                            me.boxScale = null;
+                            me.drawPrintBox.apply(me);
+                        }
+                    });
+                    $('#'+me.formId+' select[name="formato"]').change(function() {
+                        me.pageFormat = $('#'+me.formId+' select[name="formato"]').val();
+                        me.updatePrintBox();
+                    });
+                    
+                    $('#'+me.formId+' select[name="print_resolution"]').change(function() {
+                        me.printResolution = this.value;
+                    });
+                    
+                    $('#'+me.formId+' textarea[name="text"]').change(function() {
+                        me.printText = this.value;
+                    });
+                    
+                    $('#'+me.formId+' input[name="date"]').change(function() {
+                        me.printDate = this.value;
+                    });
+                    
+                    $('#'+me.formId+' input[name="legend"]').change(function() {
+                        this.value=='yes'?me.printLegend = this.value:me.printLegend=null;
+                    });
+
+                    $('#'+me.formId+' input[name="format"]').change(function() {
+                        me.printFormat = this.value;
+                    });
+
+                    $('#'+me.formId).on('click', 'a[role="html"],a[role="pdf"]', function(event) {
+                        if($(this).attr("href") == "#") event.preventDefault();
+                    });
+
+                    $('#'+me.formId).on('click', 'button[role="print"]', function(event) {
+                        event.preventDefault();
+                        $('#'+me.formId+' a[role="pdf"], #printpanel a[role="html"]').attr('href', '#');
+                        $('#'+me.formId+' span[role="icon"]').removeClass('glyphicon-white').addClass('glyphicon-disabled');
+                        me.doPrint();
+                    });
+
+                },
+                'deactivate' : function(event) {
+                    sidebarPanel.hide('printpanel');
+                    this.removePrintBox();
+                },
+                'activate' : function(event) {
+                    var me = this;
+                    if (me.map.currentControl!=me) {
+                        me.map.currentControl.deactivate();
+                        me.map.currentControl=me;
                     }
-                    sidebarPanel.handleEvent = false;
+                    $('#'+me.formId+' input[name="scale_mode"]:checked').val() == 'user' ? me.boxScale = $('#'+me.formId+' input[name="scale"]').val() : me.boxScale = null;
+                    me.drawPrintBox.apply(me);
+                },
+                'printed' : function (event) {
+                    var me = this;
+                    if(event.format == 'HTML') {
+                        $('#'+me.formId+' a[role="html"]').attr('href', event.file);
+                        $('#'+me.formId+' a[role="html"] span[role="icon"]').removeClass('glyphicon-disabled').addClass('glyphicon-white');
+                    } else if(event.format == 'PDF') {
+                        $('#'+me.formId+' a[role="pdf"]').attr('href', event.file);
+                        $('#'+me.formId+' a[role="pdf"] span[role="icon"]').removeClass('glyphicon-disabled').addClass('glyphicon-white');
+                    }
+                    
+                    var win = window.open(event.file, '_blank');
+                    win.focus();
                 }
-            }      
+            }
         }),
         
         new OpenLayers.Control.Button({ 
@@ -1249,18 +1390,14 @@ var initMap = function(){
             title:"Mappa di riferimento",
             tbarpos:"last",
             trigger: function() {
-                if (sidebarPanel.handleEvent)
+                if (this.active) {
+                    this.deactivate();
+                    GisClientMap.overviewMap.hide();
+                }
+                else
                 {
-                    if (this.active) {
-                        this.deactivate();
-                        GisClientMap.overviewMap.hide();
-                    }
-                    else
-                    {
-                        this.activate();
-                        GisClientMap.overviewMap.show();
-                    }
-                    sidebarPanel.handleEvent = false;
+                    this.activate();
+                    GisClientMap.overviewMap.show();
                 }
             }      
         })
@@ -1404,6 +1541,7 @@ var initMap = function(){
         if($(window).width() < 1000) $('#map-coordinates').hide();
         var panelContentHeight = $(window).height() - $('div.panel-header').height() - $('#map-footer').height() - 35;
         $('#sidebar-panel div.panel-content').height(panelContentHeight);
+        sidebarPanel.getCSSWidth();
     }
     $(window).resize(onResize);
     onResize.call();
