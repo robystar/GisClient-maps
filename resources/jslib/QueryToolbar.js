@@ -509,7 +509,12 @@ OpenLayers.GisClient.queryToolbar = OpenLayers.Class(OpenLayers.Control.Panel,{
                 if(value) {
                     value = '<a href="'+value+'" target="_blank" class="olControlButtonItemInactive olButton olLikeButton"><span class="glyphicon-white glyphicon-link"></span></a>';
                 }
-            break;
+                break;
+            case 8: //immagine
+                if(value) {
+                    value = '<img style="width:100%" src="'+value+'"/>';
+                }
+                break;
         }
         return value || '&nbsp;';
 
