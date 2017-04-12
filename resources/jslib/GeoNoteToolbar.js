@@ -18,13 +18,13 @@ OpenLayers.GisClient.geoNoteToolbar = OpenLayers.Class(OpenLayers.Control.Panel,
     savedState: false,
     loading: false,
     
-    baseURL: '/gisclient3/',
+    //baseURL: '/gisclient3/',
     
     
     initialize: function(options) {
         OpenLayers.Control.Panel.prototype.initialize.apply(this, [options]);
         
-        this.serviceURL = this.baseURL + 'services/plugins/geonote/redline.php';
+        this.serviceURL = GISCLIENT_URL + '/services/plugins/geonote/redline.php';
         
         var redlineStyleDefault = new OpenLayers.Style({
             pointRadius: 5, 

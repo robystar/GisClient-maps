@@ -4,8 +4,8 @@
  * and open the template in the editor.
  */
 
-var GISCLIENT_URL = '/gisclient3';
-var MAPPROXY_URL = 'http://172.16.5.72/';
+var GISCLIENT_URL = '/gisclient';
+var MAPPROXY_URL = 'http://test.gisclient.net/';
 var POPUP_TIMEOUT = 2000;
 
 // **** Numero massimo di oggetti per layer in interrogazione
@@ -14,3 +14,5 @@ var MAX_LAYER_FEATURES = 100;
 var MAX_QUERY_FEATURES = 500;
 
 
+PRINT_TEMPLATE_HTML = '';
+PRINT_TEMPLATE_PDF = '';
