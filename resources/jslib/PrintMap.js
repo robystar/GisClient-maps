@@ -116,9 +116,6 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
         else if (me.printFormat == 'PDF' && this.defaultTemplatePDF)
             params['template'] = this.defaultTemplatePDF;
 
-
-console.log(me.printBox)
-
         var bounds = me.printBox.geometry.getBounds().clone();;
         if (this.map.displayProjection && this.map.displayProjection != this.map.projection) {
             var projCOK = new OpenLayers.Projection(this.map.displayProjection);
@@ -252,7 +249,6 @@ console.log(me.printBox)
         var tile,tiles = [];
         var self = this;
         var gcConfig = this.map.config;
-        
         var layers = this.map.layers;
         var mapsetTilesActive = false;
         
@@ -347,7 +343,6 @@ console.log(me.printBox)
                 tiles.push(tile);
             }
         });
-
         tiles.reverse();
         return tiles;
     },

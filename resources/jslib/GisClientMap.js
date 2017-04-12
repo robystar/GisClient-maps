@@ -286,6 +286,7 @@ OpenLayers.GisClient = OpenLayers.Class({
                     if (this.useGMaps) {
                         cfgLayer.options.resolutions = this.map.resolutions;
                         oLayer = new OpenLayers.Layer.Google(cfgLayer.name,cfgLayer.options);
+                        oLayer.url = cfgLayer.url;
                     }
                 break;          
                 case 8:
