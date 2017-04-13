@@ -343,7 +343,8 @@ OpenLayers.Control.PrintMap = OpenLayers.Class(OpenLayers.Control.Button, {
                 tiles.push(tile);
             }
         });
-        tiles.reverse();
+        //tiles.reverse();
+        //console.log(tiles)
         return tiles;
     },
 

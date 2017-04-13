@@ -1177,7 +1177,7 @@ var initMap = function(){
             title:"Pannello di stampa",
             waitFor: 'panelready',
             allowDrag: true,
-            printLegend: 'yes',
+            printLegend: null,
             defaultTemplateHTML: PRINT_TEMPLATE_HTML,
             defaultTemplatePDF: PRINT_TEMPLATE_PDF,
             trigger: function() {
@@ -1191,7 +1191,7 @@ var initMap = function(){
                     var me = this;
 
                     if($.trim($('#printpanel').html()) == '') {
-                        $("#printpanel").load('print_panel_mobile.html', function() {
+                        $("#printpanel").load('print_panel_custom.html', function() {
                             me.events.triggerEvent('panelready');
                         });
                     }
@@ -1328,6 +1328,8 @@ var initMap = function(){
                         $('#'+me.formId+' span[role="icon"]').removeClass('glyphicon-white').addClass('glyphicon-disabled');
                         me.doPrint();
                     });
+                    
+
 
                 },
                 'deactivate' : function(event) {
@@ -1554,6 +1556,7 @@ var initMap = function(){
     if(ret.length > 0){
         ret[0].mapObject.setTilt(0);
     }
+
 
 }//END initMap
 
