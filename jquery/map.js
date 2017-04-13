@@ -1399,6 +1399,7 @@ var initMap = function(){
     var v = projection.split(":");
     map.addControl(new OpenLayers.Control.MousePosition({
         element:document.getElementById("map-coordinates"),
+        numDigits:0,
         prefix: '<a target="_blank" ' + 'href="http://spatialreference.org/ref/epsg/' + v[1] + '/">' + projection + '</a> coordinate: '
     }));
 
